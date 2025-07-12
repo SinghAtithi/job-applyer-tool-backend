@@ -1,6 +1,8 @@
 package main
 
 import (
+	_ "example.com/internal/config"
+	internalConfig "example.com/internal/config"
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,6 +30,8 @@ func main() {
 
 	router := gin.Default()
 
+	config := internalConfig.NewApplicationConfig()
+
 	router.GET("/", func(c *gin.Context) {
 		data := Data{
 			Message: "Hello, World!",
@@ -37,6 +41,6 @@ func main() {
 		c.AsciiJSON(200, data)
 	})
 
-	router.Run(":8080")
+	router.Run(":" + config.GetPort())
 
 }
