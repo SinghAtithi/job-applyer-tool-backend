@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"example.com/api/handler/helper"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	_ "github.com/ledongthuc/pdf"
 )
 
 type ResumeHandler struct{}
@@ -21,37 +24,13 @@ func (h *ResumeHandler) GetResume(c *gin.Context) {
 }
 
 func (h *ResumeHandler) CreateResume(c *gin.Context) {
-	// Parse the multipart form
-	err := c.Request.ParseMultipartForm(10 << 20) // 10 MB
+	resume, err := helper.HandleCreateResume(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Error parsing form"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		log.Fatalf("Error while making POST operation in Resume" + err.Error())
 		return
 	}
-
-	// Get the file from the form
-	file, handler, err := c.Request.FormFile("file")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Error retrieving file"})
-		return
-	}
-	defer file.Close()
-
-	// Get the other form values
-	userID := c.Request.FormValue("userID")
-	title := c.Request.FormValue("title")
-	description := c.Request.FormValue("description")
-
-	// You can now process the file and the other form values
-	// For example, save the file to a specific location
-	// and create a new resume record in the database.
-
-	c.JSON(http.StatusCreated, gin.H{
-		"message":     "CreateResume",
-		"filename":    handler.Filename,
-		"userID":      userID,
-		"title":       title,
-		"description": description,
-	})
+	c.JSON(http.StatusCreated, resume)
 }
 
 func (h *ResumeHandler) UpdateResume(c *gin.Context) {
