@@ -2,6 +2,3 @@ port: 9090
 environment: development
 logging:
   level: info
-openAPI:
-  key: "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"
-  url: "https://api.openai.com/v1"
