@@ -2,6 +2,8 @@ package helper
 
 import (
 	"bytes"
+	"encoding/json"
+	"example.com/agent"
 	"example.com/internal/models"
 	"fmt"
 	"github.com/gin-gonic/gin"
@@ -101,15 +103,67 @@ func HandleCreateResume(c *gin.Context) (models.Resume, error) {
 		log.Printf("Extracted text: %s", textContent)
 	}
 
-	return models.Resume{
-		PersonalInfo: models.PersonalInfo{
-			FirstName: "John",
-			LastName:  "Doe",
-			Email:     "Jhon@Doe.com",
-			Phone:     "123-456-7890",
-			LinkedIn:  "https://www.linkedin.com/in/johndoe",
-			GitHub:    "https://www.github.com/johndoe",
-			Website:   "https://www.johndoe.com",
-		},
-	}, nil
+	parsedResumeDetails := agent.GetResumeDetailInJsonFormat(textContent)
+
+	// parsedResumeDetails has the resume details in String format, first convert it to Resume struct
+	resumeDetails, err := GetResumeSchemaFromJsonTyped(parsedResumeDetails)
+	if resumeDetails == nil || err != nil {
+		return models.Resume{}, fmt.Errorf("error parsing resume details from JSON string: %w", err)
+	}
+
+	log.Printf("Resume details: %+v", resumeDetails)
+	return *resumeDetails, nil
+
+}
+
+func GetResumeSchemaFromJsonTyped(details string) (*models.Resume, error) {
+	// Input validation
+	if details == "" {
+		return nil, fmt.Errorf("input JSON string is empty")
+	}
+
+	// Trim whitespace and check for basic JSON structure
+	details = strings.TrimSpace(details)
+	if !strings.HasPrefix(details, "{") || !strings.HasSuffix(details, "}") {
+		return nil, fmt.Errorf("invalid JSON format: must start with '{' and end with '}'")
+	}
+
+	// Check if it's valid JSON first
+	var jsonCheck interface{}
+	if err := json.Unmarshal([]byte(details), &jsonCheck); err != nil {
+		// More specific JSON syntax error
+		if syntaxErr, ok := err.(*json.SyntaxError); ok {
+			return nil, fmt.Errorf("JSON syntax error at position %d: %w", syntaxErr.Offset, err)
+		}
+		if typeErr, ok := err.(*json.UnmarshalTypeError); ok {
+			return nil, fmt.Errorf("JSON type error: cannot unmarshal %s into field %s of type %s at position %d",
+				typeErr.Value, typeErr.Field, typeErr.Type, typeErr.Offset)
+		}
+		return nil, fmt.Errorf("invalid JSON format: %w", err)
+	}
+
+	// Initialize the resume struct
+	resumeDetails := &models.Resume{}
+
+	// Attempt to unmarshal into the specific struct
+	err := json.Unmarshal([]byte(details), resumeDetails)
+	if err != nil {
+		// Provide detailed error information
+		if syntaxErr, ok := err.(*json.SyntaxError); ok {
+			return nil, fmt.Errorf("JSON syntax error while parsing resume at position %d: %w", syntaxErr.Offset, err)
+		}
+
+		if typeErr, ok := err.(*json.UnmarshalTypeError); ok {
+			return nil, fmt.Errorf("type mismatch in resume JSON: field '%s' expects type %s but got %s at position %d",
+				typeErr.Field, typeErr.Type, typeErr.Value, typeErr.Offset)
+		}
+
+		if fieldErr, ok := err.(*json.UnsupportedTypeError); ok {
+			return nil, fmt.Errorf("unsupported type error in resume JSON: %s", fieldErr.Type)
+		}
+
+		return nil, fmt.Errorf("failed to parse resume JSON into struct: %w", err)
+	}
+
+	return resumeDetails, nil
 }

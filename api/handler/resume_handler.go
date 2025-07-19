@@ -27,7 +27,7 @@ func (h *ResumeHandler) CreateResume(c *gin.Context) {
 	resume, err := helper.HandleCreateResume(c)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		log.Fatalf("Error while making POST operation in Resume" + err.Error())
+		log.Println("Error while making POST operation in Resume" + err.Error())
 		return
 	}
 	c.JSON(http.StatusCreated, resume)
