@@ -1,450 +1,163 @@
+// Package models provides data structures for the application's core domain models.
+//
+// This file defines the Resume struct and related types, representing a user's resume and its components.
+// It includes embedded structs for personal information, education, experience, skills, projects, hobbies, and additional info.
+//
+// Author: Atithi (coder_ravan)
+// Date: July 20, 2025
+//
+// Usage:
+//   These models are used throughout the backend for resume management, parsing, and persistence.
+//
+// Struct Documentation:
+//
+// Resume: Represents a user's resume, including metadata and comprehensive resume data.
+// PersonalInfo: Contains personal details of the user.
+// Education: Represents an educational qualification (see below for struct definition).
+// Experience: Represents a work experience entry (see below for struct definition).
+// Skills: Represents a user's skills (see below for struct definition).
+// Project: Represents a project entry (see below for struct definition).
+// AdditionalInfo: Contains additional information about the user (see below for struct definition).
+// Address: Represents a user's address (see below for struct definition).
+//
+// Functions in this file (if any) are documented individually below their definition.
+
 package models
 
 import (
-	"database/sql/driver"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 )
 
-// Base Resume struct
+// Resume represents a user's resume, including metadata and comprehensive resume data.
 type Resume struct {
-	ID          uint      `json:"id" gorm:"primaryKey"`
-	UserID      uint      `json:"user_id" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE;OnDelete:CASCADE"`
-	Title       string    `json:"title"`
-	Description string    `json:"description,omitempty"`
-	FileType    string    `json:"file_type,omitempty"`
-	IsActive    bool      `json:"is_active" gorm:"default:true"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          uint      `json:"id" gorm:"primaryKey"`                                                          // Unique identifier for the resume
+	UserID      uint      `json:"user_id" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE;OnDelete:CASCADE"` // Associated user ID
+	Title       string    `json:"title"`                                                                         // Title of the resume
+	Description string    `json:"description,omitempty"`                                                         // Optional description
+	FileType    string    `json:"file_type,omitempty"`                                                           // File type (e.g., PDF, DOCX)
+	IsActive    bool      `json:"is_active" gorm:"default:true"`                                                 // Indicates if the resume is active
+	CreatedAt   time.Time `json:"created_at"`                                                                    // Creation timestamp
+	UpdatedAt   time.Time `json:"updated_at"`                                                                    // Last update timestamp
 
 	// Embedded comprehensive resume data
-	PersonalInfo   PersonalInfo    `json:"personal_info" gorm:"embedded;embeddedPrefix:personal_"`
-	Summary        *Summary        `json:"summary,omitempty" gorm:"embedded;embeddedPrefix:summary_"`
-	Objective      *Objective      `json:"objective,omitempty" gorm:"embedded;embeddedPrefix:objective_"`
-	Education      []Education     `json:"education,omitempty" gorm:"serializer:json"`
-	Experience     []Experience    `json:"experience,omitempty" gorm:"serializer:json"`
-	Skills         *Skills         `json:"skills,omitempty" gorm:"embedded;embeddedPrefix:skills_"`
-	Projects       []Project       `json:"projects,omitempty" gorm:"serializer:json"`
-	Certifications []Certification `json:"certifications,omitempty" gorm:"serializer:json"`
-	Publications   []Publication   `json:"publications,omitempty" gorm:"serializer:json"`
-	Awards         []Award         `json:"awards,omitempty" gorm:"serializer:json"`
-	Languages      []Language      `json:"languages,omitempty" gorm:"serializer:json"`
-	Volunteer      []VolunteerWork `json:"volunteer,omitempty" gorm:"serializer:json"`
-	Leadership     []Leadership    `json:"leadership,omitempty" gorm:"serializer:json"`
-	References     []Reference     `json:"references,omitempty" gorm:"serializer:json"`
-	Courses        []Course        `json:"courses,omitempty" gorm:"serializer:json"`
-	Research       []Research      `json:"research,omitempty" gorm:"serializer:json"`
-	Patents        []Patent        `json:"patents,omitempty" gorm:"serializer:json"`
-	Conferences    []Conference    `json:"conferences,omitempty" gorm:"serializer:json"`
-	Portfolio      []PortfolioItem `json:"portfolio,omitempty" gorm:"serializer:json"`
-	Hobbies        []string        `json:"hobbies,omitempty" gorm:"serializer:json"`
-	AdditionalInfo *AdditionalInfo `json:"additional_info,omitempty" gorm:"embedded;embeddedPrefix:additional_"`
+	PersonalInfo   PersonalInfo    `json:"personal_info" gorm:"embedded;embeddedPrefix:personal_"`               // Personal information
+	Summary        string          `json:"summary,omitempty" gorm:"embedded;embeddedPrefix:summary_"`            // Professional summary
+	Education      []Education     `json:"education,omitempty" gorm:"serializer:json"`                           // List of education entries
+	Experience     []Experience    `json:"experience,omitempty" gorm:"serializer:json"`                          // List of work experiences
+	Skills         *Skills         `json:"skills,omitempty" gorm:"embedded;embeddedPrefix:skills_"`              // Skills
+	Projects       []Project       `json:"projects,omitempty" gorm:"serializer:json"`                            // List of projects
+	Hobbies        []string        `json:"hobbies,omitempty" gorm:"serializer:json"`                             // List of hobbies
+	AdditionalInfo *AdditionalInfo `json:"additional_info,omitempty" gorm:"embedded;embeddedPrefix:additional_"` // Additional information
 }
 
-// Personal Information
+// PersonalInfo contains personal details of the user.
 type PersonalInfo struct {
-	FirstName      string      `json:"first_name"`
-	LastName       string      `json:"last_name"`
-	MiddleName     string      `json:"middle_name,omitempty"`
-	Title          string      `json:"title,omitempty"` // e.g., "Dr.", "Mr.", "Ms."
-	Email          string      `json:"email"`
-	Phone          string      `json:"phone,omitempty"`
-	AlternatePhone string      `json:"alternate_phone,omitempty"`
-	Address        *Address    `json:"address,omitempty" gorm:"embedded;embeddedPrefix:address_"`
-	Website        string      `json:"website,omitempty"`
-	LinkedIn       string      `json:"linkedin,omitempty"`
-	GitHub         string      `json:"github,omitempty"`
-	Twitter        string      `json:"twitter,omitempty"`
-	Instagram      string      `json:"instagram,omitempty"`
-	Facebook       string      `json:"facebook,omitempty"`
-	Portfolio      string      `json:"portfolio,omitempty"`
-	DateOfBirth    *time.Time  `json:"date_of_birth,omitempty"`
-	Nationality    string      `json:"nationality,omitempty"`
-	Gender         string      `json:"gender,omitempty"`
-	MaritalStatus  string      `json:"marital_status,omitempty"`
-	ProfilePicture string      `json:"profile_picture,omitempty"`
-	SocialLinks    SocialLinks `json:"social_links,omitempty" gorm:"serializer:json"`
+	FirstName     string     `json:"first_name"`                                                // User's first name
+	LastName      string     `json:"last_name"`                                                 // User's last name
+	MiddleName    string     `json:"middle_name,omitempty"`                                     // Optional middle name
+	Title         string     `json:"title,omitempty"`                                           // e.g., "Dr.", "Mr.", "Ms."
+	Email         string     `json:"email"`                                                     // Email address
+	Phone         string     `json:"phone,omitempty"`                                           // Optional phone number
+	Address       *Address   `json:"address,omitempty" gorm:"embedded;embeddedPrefix:address_"` // Address
+	Website       string     `json:"website,omitempty"`                                         // Optional website
+	LinkedIn      string     `json:"linkedin,omitempty"`                                        // LinkedIn profile URL
+	GitHub        string     `json:"github,omitempty"`                                          // GitHub profile URL
+	Twitter       string     `json:"twitter,omitempty"`                                         // Twitter profile URL
+	Portfolio     string     `json:"portfolio,omitempty"`                                       // Portfolio URL
+	DateOfBirth   *time.Time `json:"date_of_birth,omitempty"`                                   // Optional date of birth
+	Nationality   string     `json:"nationality,omitempty"`                                     // Nationality
+	Gender        string     `json:"gender,omitempty"`                                          // Gender
+	MaritalStatus string     `json:"marital_status,omitempty"`                                  // Marital status
 }
 
 type Address struct {
-	Street     string `json:"street,omitempty"`
-	City       string `json:"city,omitempty"`
-	State      string `json:"state,omitempty"`
-	Country    string `json:"country,omitempty"`
-	PostalCode string `json:"postal_code,omitempty"`
-	IsPresent  bool   `json:"is_present,omitempty"`
+	Street     string `json:"street,omitempty"`      // Street address
+	City       string `json:"city,omitempty"`        // City
+	State      string `json:"state,omitempty"`       // State or region
+	Country    string `json:"country,omitempty"`     // Country
+	PostalCode string `json:"postal_code,omitempty"` // Postal or ZIP code
 }
 
-type SocialLinks map[string]string // For flexible social media links
-
-// Summary/Profile Section
-type Summary struct {
-	Content    string   `json:"content"`
-	Keywords   []string `json:"keywords,omitempty" gorm:"serializer:json"`
-	YearsOfExp int      `json:"years_of_experience,omitempty"`
-}
-
-// Objective Section
-type Objective struct {
-	Content    string `json:"content"`
-	CareerGoal string `json:"career_goal,omitempty"`
-	Industry   string `json:"industry,omitempty"`
-}
-
-// Education
+// Education represents an educational qualification.
 type Education struct {
-	ID           uint       `json:"id,omitempty"`
-	Institution  string     `json:"institution"`
-	Degree       string     `json:"degree"`
-	FieldOfStudy string     `json:"field_of_study,omitempty"`
-	Grade        string     `json:"grade,omitempty"`      // GPA, CGPA, Percentage, etc.
-	GradeType    string     `json:"grade_type,omitempty"` // "GPA", "CGPA", "Percentage"
-	StartDate    *time.Time `json:"start_date,omitempty"`
-	EndDate      *time.Time `json:"end_date,omitempty"`
-	IsCurrent    bool       `json:"is_current,omitempty"`
-	Location     string     `json:"location,omitempty"`
-	Description  string     `json:"description,omitempty"`
-	Achievements []string   `json:"achievements,omitempty" gorm:"serializer:json"`
-	Coursework   []string   `json:"coursework,omitempty" gorm:"serializer:json"`
-	Honors       []string   `json:"honors,omitempty" gorm:"serializer:json"`
-	Thesis       string     `json:"thesis,omitempty"`
-	Advisor      string     `json:"advisor,omitempty"`
-	Activities   []string   `json:"activities,omitempty" gorm:"serializer:json"`
+	ID           uint       `json:"id,omitempty"`             // Unique identifier for the education entry
+	Institution  string     `json:"institution"`              // Name of the institution
+	Degree       string     `json:"degree"`                   // Degree or certification obtained
+	FieldOfStudy string     `json:"field_of_study,omitempty"` // Field of study or major
+	Grade        string     `json:"grade,omitempty"`          // GPA, CGPA, Percentage, etc.
+	GradeType    string     `json:"grade_type,omitempty"`     // "GPA", "CGPA", "Percentage"
+	StartDate    *time.Time `json:"start_date,omitempty"`     // Start date of the education
+	EndDate      *time.Time `json:"end_date,omitempty"`       // End date of the education
+	IsCurrent    bool       `json:"is_current,omitempty"`     // Indicates if it's the current education
 }
 
-// Work Experience
+// WorkExperience represents a work experience entry.
 type Experience struct {
-	ID               uint       `json:"id,omitempty"`
-	JobTitle         string     `json:"job_title"`
-	Company          string     `json:"company"`
-	Department       string     `json:"department,omitempty"`
-	Location         string     `json:"location,omitempty"`
-	StartDate        *time.Time `json:"start_date,omitempty"`
-	EndDate          *time.Time `json:"end_date,omitempty"`
-	IsCurrent        bool       `json:"is_current,omitempty"`
-	EmploymentType   string     `json:"employment_type,omitempty"` // Full-time, Part-time, Contract, Internship
-	Description      string     `json:"description,omitempty"`
-	Responsibilities []string   `json:"responsibilities,omitempty" gorm:"serializer:json"`
-	Achievements     []string   `json:"achievements,omitempty" gorm:"serializer:json"`
-	TechnologiesUsed []string   `json:"technologies_used,omitempty" gorm:"serializer:json"`
-	Supervisor       string     `json:"supervisor,omitempty"`
-	Salary           string     `json:"salary,omitempty"`
-	ReasonForLeaving string     `json:"reason_for_leaving,omitempty"`
-	Skills           []string   `json:"skills,omitempty" gorm:"serializer:json"`
-	Projects         []string   `json:"projects,omitempty" gorm:"serializer:json"`
+	ID               uint       `json:"id,omitempty"`                                       // Unique identifier for the experience entry
+	JobTitle         string     `json:"job_title"`                                          // Job title
+	Company          string     `json:"company"`                                            // Company name
+	Role             string     `json:"role,omitempty"`                                     // Optional role description
+	Location         string     `json:"location,omitempty"`                                 // Optional location
+	StartDate        *time.Time `json:"start_date,omitempty"`                               // Start date of the experience
+	EndDate          *time.Time `json:"end_date,omitempty"`                                 // End date of the experience
+	IsCurrent        bool       `json:"is_current,omitempty"`                               // Indicates if it's the current job
+	EmploymentType   string     `json:"employment_type,omitempty"`                          // Full-time, Part-time, Contract, Internship
+	Description      string     `json:"description,omitempty"`                              // Job description
+	Responsibilities []string   `json:"responsibilities,omitempty" gorm:"serializer:json"`  // List of responsibilities
+	Achievements     []string   `json:"achievements,omitempty" gorm:"serializer:json"`      // List of achievements
+	TechnologiesUsed []string   `json:"technologies_used,omitempty" gorm:"serializer:json"` // List of technologies used
 }
 
-// Skills Section
+// Skills represents a user's skills.
 type Skills struct {
-	Technical        []TechnicalSkill `json:"technical,omitempty" gorm:"serializer:json"`
-	Soft             []SoftSkill      `json:"soft,omitempty" gorm:"serializer:json"`
-	Languages        []LanguageSkill  `json:"languages,omitempty" gorm:"serializer:json"`
-	Tools            []string         `json:"tools,omitempty" gorm:"serializer:json"`
-	Frameworks       []string         `json:"frameworks,omitempty" gorm:"serializer:json"`
-	Libraries        []string         `json:"libraries,omitempty" gorm:"serializer:json"`
-	Databases        []string         `json:"databases,omitempty" gorm:"serializer:json"`
-	CloudPlatforms   []string         `json:"cloud_platforms,omitempty" gorm:"serializer:json"`
-	OperatingSystems []string         `json:"operating_systems,omitempty" gorm:"serializer:json"`
-	Methodologies    []string         `json:"methodologies,omitempty" gorm:"serializer:json"`
-	Industry         []string         `json:"industry,omitempty" gorm:"serializer:json"`
+	Technical        []TechnicalSkill `json:"technical,omitempty" gorm:"serializer:json"`         // List of technical skills
+	Tools            []string         `json:"tools,omitempty" gorm:"serializer:json"`             // List of tools
+	Frameworks       []string         `json:"frameworks,omitempty" gorm:"serializer:json"`        // List of frameworks
+	Libraries        []string         `json:"libraries,omitempty" gorm:"serializer:json"`         // List of libraries
+	Databases        []string         `json:"databases,omitempty" gorm:"serializer:json"`         // List of databases
+	CloudPlatforms   []string         `json:"cloud_platforms,omitempty" gorm:"serializer:json"`   // List of cloud platforms
+	OperatingSystems []string         `json:"operating_systems,omitempty" gorm:"serializer:json"` // List of operating systems
+	Methodologies    []string         `json:"methodologies,omitempty" gorm:"serializer:json"`     // List of methodologies
 }
 
 type TechnicalSkill struct {
-	Name       string `json:"name"`
-	Level      string `json:"level,omitempty"` // Beginner, Intermediate, Advanced, Expert
-	YearsOfExp int    `json:"years_of_experience,omitempty"`
-	Category   string `json:"category,omitempty"` // Programming, Database, Cloud, etc.
+	Name       string `json:"name"`                 // Name of the technical skill
+	Level      string `json:"level,omitempty"`      // Beginner, Intermediate, Advanced, Expert
+	Experience int    `json:"experience,omitempty"` // in years
+	Category   string `json:"category,omitempty"`   // Programming, Database, Cloud, etc.
 }
 
-type SoftSkill struct {
-	Name        string `json:"name"`
-	Level       string `json:"level,omitempty"`
-	Description string `json:"description,omitempty"`
-}
-
-type LanguageSkill struct {
-	Name        string `json:"name"`
-	Proficiency string `json:"proficiency,omitempty"` // Native, Fluent, Conversational, Basic
-	Speaking    string `json:"speaking,omitempty"`
-	Writing     string `json:"writing,omitempty"`
-	Reading     string `json:"reading,omitempty"`
-}
-
-// Projects
+// Project represents a project entry.
 type Project struct {
-	ID           uint       `json:"id,omitempty"`
-	Name         string     `json:"name"`
-	Description  string     `json:"description,omitempty"`
-	Role         string     `json:"role,omitempty"`
-	StartDate    *time.Time `json:"start_date,omitempty"`
-	EndDate      *time.Time `json:"end_date,omitempty"`
-	IsCurrent    bool       `json:"is_current,omitempty"`
-	Technologies []string   `json:"technologies,omitempty" gorm:"serializer:json"`
-	Features     []string   `json:"features,omitempty" gorm:"serializer:json"`
-	Achievements []string   `json:"achievements,omitempty" gorm:"serializer:json"`
-	URL          string     `json:"url,omitempty"`
-	GitHubURL    string     `json:"github_url,omitempty"`
-	DemoURL      string     `json:"demo_url,omitempty"`
-	Category     string     `json:"category,omitempty"` // Web, Mobile, Desktop, AI/ML, etc.
-	Status       string     `json:"status,omitempty"`   // Completed, In Progress, Planned
-	TeamSize     int        `json:"team_size,omitempty"`
-	Client       string     `json:"client,omitempty"`
-	Budget       string     `json:"budget,omitempty"`
-	Challenges   []string   `json:"challenges,omitempty" gorm:"serializer:json"`
-	Learnings    []string   `json:"learnings,omitempty" gorm:"serializer:json"`
+	ID           uint       `json:"id,omitempty"`                                  // Unique identifier for the project
+	Name         string     `json:"name"`                                          // Project name
+	Description  string     `json:"description,omitempty"`                         // Optional project description
+	Technologies []string   `json:"technologies,omitempty" gorm:"serializer:json"` // List of technologies used
+	URL          string     `json:"url,omitempty"`                                 // Optional project URL
+	GitHubURL    string     `json:"github_url,omitempty"`                          // Optional GitHub URL
+	StartDate    *time.Time `json:"start_date,omitempty"`                          // Start date of the project
+	EndDate      *time.Time `json:"end_date,omitempty"`                            // End date of the project
+	IsCurrent    bool       `json:"is_current,omitempty"`                          // Indicates if it's the current project
 }
 
-// Certifications
-type Certification struct {
-	ID              uint       `json:"id,omitempty"`
-	Name            string     `json:"name"`
-	IssuingOrg      string     `json:"issuing_organization"`
-	IssueDate       *time.Time `json:"issue_date,omitempty"`
-	ExpiryDate      *time.Time `json:"expiry_date,omitempty"`
-	CredentialID    string     `json:"credential_id,omitempty"`
-	URL             string     `json:"url,omitempty"`
-	Description     string     `json:"description,omitempty"`
-	Skills          []string   `json:"skills,omitempty" gorm:"serializer:json"`
-	VerificationURL string     `json:"verification_url,omitempty"`
-	Score           string     `json:"score,omitempty"`
-	IsActive        bool       `json:"is_active,omitempty"`
-}
-
-// Publications
-type Publication struct {
-	ID              uint       `json:"id,omitempty"`
-	Title           string     `json:"title"`
-	Authors         []string   `json:"authors,omitempty" gorm:"serializer:json"`
-	Journal         string     `json:"journal,omitempty"`
-	Publisher       string     `json:"publisher,omitempty"`
-	PublicationDate *time.Time `json:"publication_date,omitempty"`
-	Volume          string     `json:"volume,omitempty"`
-	Issue           string     `json:"issue,omitempty"`
-	Pages           string     `json:"pages,omitempty"`
-	DOI             string     `json:"doi,omitempty"`
-	URL             string     `json:"url,omitempty"`
-	Abstract        string     `json:"abstract,omitempty"`
-	Keywords        []string   `json:"keywords,omitempty" gorm:"serializer:json"`
-	CitationCount   int        `json:"citation_count,omitempty"`
-	Type            string     `json:"type,omitempty"`   // Journal, Conference, Book, etc.
-	Status          string     `json:"status,omitempty"` // Published, Under Review, Draft
-}
-
-// Awards and Honors
-type Award struct {
-	ID          uint       `json:"id,omitempty"`
-	Title       string     `json:"title"`
-	IssuingOrg  string     `json:"issuing_organization"`
-	Date        *time.Time `json:"date,omitempty"`
-	Description string     `json:"description,omitempty"`
-	Category    string     `json:"category,omitempty"` // Academic, Professional, Competition
-	Level       string     `json:"level,omitempty"`    // International, National, Regional, Local
-	Rank        string     `json:"rank,omitempty"`
-	Prize       string     `json:"prize,omitempty"`
-	URL         string     `json:"url,omitempty"`
-	Skills      []string   `json:"skills,omitempty" gorm:"serializer:json"`
-}
-
-// Languages
-type Language struct {
-	ID            uint   `json:"id,omitempty"`
-	Name          string `json:"name"`
-	Proficiency   string `json:"proficiency"` // Native, Fluent, Conversational, Basic
-	Speaking      string `json:"speaking,omitempty"`
-	Writing       string `json:"writing,omitempty"`
-	Reading       string `json:"reading,omitempty"`
-	Listening     string `json:"listening,omitempty"`
-	Certification string `json:"certification,omitempty"`
-	TestScore     string `json:"test_score,omitempty"`
-	YearsOfExp    int    `json:"years_of_experience,omitempty"`
-}
-
-// Volunteer Work
-type VolunteerWork struct {
-	ID           uint       `json:"id,omitempty"`
-	Organization string     `json:"organization"`
-	Role         string     `json:"role"`
-	StartDate    *time.Time `json:"start_date,omitempty"`
-	EndDate      *time.Time `json:"end_date,omitempty"`
-	IsCurrent    bool       `json:"is_current,omitempty"`
-	Location     string     `json:"location,omitempty"`
-	Description  string     `json:"description,omitempty"`
-	Achievements []string   `json:"achievements,omitempty" gorm:"serializer:json"`
-	Skills       []string   `json:"skills,omitempty" gorm:"serializer:json"`
-	HoursPerWeek int        `json:"hours_per_week,omitempty"`
-	TotalHours   int        `json:"total_hours,omitempty"`
-	Cause        string     `json:"cause,omitempty"`
-	Website      string     `json:"website,omitempty"`
-}
-
-// Leadership Experience
-type Leadership struct {
-	ID               uint       `json:"id,omitempty"`
-	Title            string     `json:"title"`
-	Organization     string     `json:"organization"`
-	StartDate        *time.Time `json:"start_date,omitempty"`
-	EndDate          *time.Time `json:"end_date,omitempty"`
-	IsCurrent        bool       `json:"is_current,omitempty"`
-	Location         string     `json:"location,omitempty"`
-	Description      string     `json:"description,omitempty"`
-	Responsibilities []string   `json:"responsibilities,omitempty" gorm:"serializer:json"`
-	Achievements     []string   `json:"achievements,omitempty" gorm:"serializer:json"`
-	TeamSize         int        `json:"team_size,omitempty"`
-	Budget           string     `json:"budget,omitempty"`
-	Skills           []string   `json:"skills,omitempty" gorm:"serializer:json"`
-	Type             string     `json:"type,omitempty"` // Professional, Academic, Community
-}
-
-// References
-type Reference struct {
-	ID           uint   `json:"id,omitempty"`
-	Name         string `json:"name"`
-	Title        string `json:"title,omitempty"`
-	Company      string `json:"company,omitempty"`
-	Email        string `json:"email,omitempty"`
-	Phone        string `json:"phone,omitempty"`
-	Relationship string `json:"relationship,omitempty"`
-	YearsKnown   int    `json:"years_known,omitempty"`
-	LinkedIn     string `json:"linkedin,omitempty"`
-	CanContact   bool   `json:"can_contact,omitempty"`
-	Note         string `json:"note,omitempty"`
-}
-
-// Courses and Training
-type Course struct {
-	ID             uint       `json:"id,omitempty"`
-	Name           string     `json:"name"`
-	Provider       string     `json:"provider,omitempty"`
-	Instructor     string     `json:"instructor,omitempty"`
-	CompletionDate *time.Time `json:"completion_date,omitempty"`
-	Duration       string     `json:"duration,omitempty"`
-	Grade          string     `json:"grade,omitempty"`
-	CredentialID   string     `json:"credential_id,omitempty"`
-	URL            string     `json:"url,omitempty"`
-	Description    string     `json:"description,omitempty"`
-	Skills         []string   `json:"skills,omitempty" gorm:"serializer:json"`
-	Category       string     `json:"category,omitempty"`
-	IsOnline       bool       `json:"is_online,omitempty"`
-	Certificate    string     `json:"certificate,omitempty"`
-}
-
-// Research Experience
-type Research struct {
-	ID                 uint       `json:"id,omitempty"`
-	Title              string     `json:"title"`
-	Institution        string     `json:"institution"`
-	Supervisor         string     `json:"supervisor,omitempty"`
-	StartDate          *time.Time `json:"start_date,omitempty"`
-	EndDate            *time.Time `json:"end_date,omitempty"`
-	IsCurrent          bool       `json:"is_current,omitempty"`
-	Field              string     `json:"field,omitempty"`
-	Description        string     `json:"description,omitempty"`
-	Methodology        []string   `json:"methodology,omitempty" gorm:"serializer:json"`
-	Findings           []string   `json:"findings,omitempty" gorm:"serializer:json"`
-	Publications       []string   `json:"publications,omitempty" gorm:"serializer:json"`
-	Technologies       []string   `json:"technologies,omitempty" gorm:"serializer:json"`
-	Funding            string     `json:"funding,omitempty"`
-	CollaboratorsCount int        `json:"collaborators_count,omitempty"`
-}
-
-// Patents
-type Patent struct {
-	ID              uint       `json:"id,omitempty"`
-	Title           string     `json:"title"`
-	PatentNumber    string     `json:"patent_number,omitempty"`
-	ApplicationDate *time.Time `json:"application_date,omitempty"`
-	IssueDate       *time.Time `json:"issue_date,omitempty"`
-	Status          string     `json:"status,omitempty"` // Pending, Granted, Expired
-	Inventors       []string   `json:"inventors,omitempty" gorm:"serializer:json"`
-	Assignee        string     `json:"assignee,omitempty"`
-	Country         string     `json:"country,omitempty"`
-	Description     string     `json:"description,omitempty"`
-	Claims          []string   `json:"claims,omitempty" gorm:"serializer:json"`
-	URL             string     `json:"url,omitempty"`
-	Field           string     `json:"field,omitempty"`
-}
-
-// Conferences and Presentations
-type Conference struct {
-	ID               uint       `json:"id,omitempty"`
-	Title            string     `json:"title"`
-	Event            string     `json:"event"`
-	Location         string     `json:"location,omitempty"`
-	Date             *time.Time `json:"date,omitempty"`
-	Type             string     `json:"type,omitempty"`              // Presenter, Attendee, Organizer
-	PresentationType string     `json:"presentation_type,omitempty"` // Oral, Poster, Workshop
-	Abstract         string     `json:"abstract,omitempty"`
-	Audience         string     `json:"audience,omitempty"`
-	URL              string     `json:"url,omitempty"`
-	CoAuthors        []string   `json:"co_authors,omitempty" gorm:"serializer:json"`
-	Awards           []string   `json:"awards,omitempty" gorm:"serializer:json"`
-}
-
-// Portfolio Items
-type PortfolioItem struct {
-	ID           uint       `json:"id,omitempty"`
-	Title        string     `json:"title"`
-	Type         string     `json:"type,omitempty"` // Image, Video, Document, Website, etc.
-	URL          string     `json:"url,omitempty"`
-	ThumbnailURL string     `json:"thumbnail_url,omitempty"`
-	Description  string     `json:"description,omitempty"`
-	Category     string     `json:"category,omitempty"`
-	Tags         []string   `json:"tags,omitempty" gorm:"serializer:json"`
-	Date         *time.Time `json:"date,omitempty"`
-	Client       string     `json:"client,omitempty"`
-	Technologies []string   `json:"technologies,omitempty" gorm:"serializer:json"`
-	IsPublic     bool       `json:"is_public,omitempty"`
-}
-
-// Additional Information
+// AdditionalInfo contains additional information about the user.
 type AdditionalInfo struct {
-	Availability            string                 `json:"availability,omitempty"`
-	NoticePeriod            string                 `json:"notice_period,omitempty"`
-	Salary                  string                 `json:"salary,omitempty"`
-	WillingToRelocate       bool                   `json:"willing_to_relocate,omitempty"`
-	WillingToTravel         string                 `json:"willing_to_travel,omitempty"`
-	WorkAuthorization       string                 `json:"work_authorization,omitempty"`
-	SecurityClearance       string                 `json:"security_clearance,omitempty"`
-	DrivingLicense          string                 `json:"driving_license,omitempty"`
-	MilitaryService         string                 `json:"military_service,omitempty"`
-	Disabilities            string                 `json:"disabilities,omitempty"`
-	EmergencyContact        string                 `json:"emergency_contact,omitempty"`
-	PreferredLocation       string                 `json:"preferred_location,omitempty"`
-	RemoteWork              bool                   `json:"remote_work,omitempty"`
-	PartTime                bool                   `json:"part_time,omitempty"`
-	Freelance               bool                   `json:"freelance,omitempty"`
-	StartDate               *time.Time             `json:"start_date,omitempty"`
-	PersonalStatement       string                 `json:"personal_statement,omitempty"`
-	CareerGoals             string                 `json:"career_goals,omitempty"`
-	ProfessionalMemberships []string               `json:"professional_memberships,omitempty" gorm:"serializer:json"`
-	BoardPositions          []string               `json:"board_positions,omitempty" gorm:"serializer:json"`
-	MediaAppearances        []string               `json:"media_appearances,omitempty" gorm:"serializer:json"`
-	SpeakingEngagements     []string               `json:"speaking_engagements,omitempty" gorm:"serializer:json"`
-	TestScores              map[string]string      `json:"test_scores,omitempty" gorm:"serializer:json"`
-	CustomFields            map[string]interface{} `json:"custom_fields,omitempty" gorm:"serializer:json"`
-}
-
-// Helper methods for JSON serialization with GORM
-func (s SocialLinks) Value() (driver.Value, error) {
-	if s == nil {
-		return nil, nil
-	}
-	return json.Marshal(s)
-}
-
-func (s *SocialLinks) Scan(value interface{}) error {
-	if value == nil {
-		return nil
-	}
-
-	bytes, ok := value.([]byte)
-	if !ok {
-		return errors.New("cannot scan non-bytes value into SocialLinks")
-	}
-
-	return json.Unmarshal(bytes, s)
+	Availability      string                 `json:"availability,omitempty"`                         // Availability status
+	NoticePeriod      string                 `json:"notice_period,omitempty"`                        // Notice period duration
+	Salary            string                 `json:"salary,omitempty"`                               // Expected salary
+	WillingToRelocate bool                   `json:"willing_to_relocate,omitempty"`                  // Willingness to relocate
+	WillingToTravel   string                 `json:"willing_to_travel,omitempty"`                    // Willingness to travel
+	WorkAuthorization string                 `json:"work_authorization,omitempty"`                   // Work authorization status
+	SecurityClearance string                 `json:"security_clearance,omitempty"`                   // Security clearance level
+	DrivingLicense    string                 `json:"driving_license,omitempty"`                      // Driving license details
+	MilitaryService   string                 `json:"military_service,omitempty"`                     // Military service details
+	Disabilities      string                 `json:"disabilities,omitempty"`                         // Disability status
+	EmergencyContact  string                 `json:"emergency_contact,omitempty"`                    // Emergency contact details
+	PreferredLocation string                 `json:"preferred_location,omitempty"`                   // Preferred job location
+	RemoteWork        bool                   `json:"remote_work,omitempty"`                          // Indicates if remote work is preferred
+	CustomFields      map[string]interface{} `json:"custom_fields,omitempty" gorm:"serializer:json"` // Custom fields as key-value pairs
 }
 
 // Resume builder helper methods
@@ -572,3 +285,9 @@ func (e *Education) GetDuration() string {
 	}
 	return "Less than a year"
 }
+
+func GetResumeSchemaSystemPrompt() string {
+	return ResumeSchemaSystemPrompt
+}
+
+var ResumeSchemaSystemPrompt = "You are a resume data extraction system. Your task is to parse the provided resume text and return ONLY a JSON object that matches the following schema. Follow these rules strictly:\n\n1. Return ONLY valid JSON - no additional text, explanations, or formatting\n2. Use only the data present in the provided text - do not create, assume, or invent any information\n3. If a field has no corresponding data in the text, omit it from the JSON or set it to null/empty as appropriate\n4. Follow the exact field names and structure from the schema below\n5. For arrays, only include items that have actual data from the text\n6. Use proper JSON data types (strings, numbers, booleans, arrays, objects)\n7. For dates, use ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ) or null if not available\n8. For boolean fields, use true/false based on explicit information only\n\nJSON Schema to follow:\n\n```json\n{\n  \"id\": number,\n  \"user_id\": number,\n  \"title\": string,\n  \"description\": string,\n  \"file_type\": string,\n  \"is_active\": boolean,\n  \"created_at\": string, // ISO 8601 datetime format\n  \"updated_at\": string, // ISO 8601 datetime format\n  \n  \"personal_info\": {\n    \"first_name\": string,\n    \"last_name\": string,\n    \"middle_name\": string,\n    \"title\": string, // e.g., \"Dr.\", \"Mr.\", \"Ms.\"\n    \"email\": string,\n    \"phone\": string,\n    \"alternate_phone\": string,\n    \"address\": {\n      \"street\": string,\n      \"city\": string,\n      \"state\": string,\n      \"country\": string,\n      \"postal_code\": string,\n      \"is_present\": boolean\n    },\n    \"website\": string,\n    \"linkedin\": string,\n    \"github\": string,\n    \"twitter\": string,\n    \"instagram\": string,\n    \"facebook\": string,\n    \"portfolio\": string,\n    \"date_of_birth\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n    \"nationality\": string,\n    \"gender\": string,\n    \"marital_status\": string,\n    \"profile_picture\": string,\n    \"social_links\": object // map of string to string\n  },\n  \n  \"summary\": {\n    \"content\": string,\n    \"keywords\": array, // array of strings\n    \"years_of_experience\": number\n  },\n  \n  \"objective\": {\n    \"content\": string,\n    \"career_goal\": string,\n    \"industry\": string\n  },\n  \n  \"education\": [ // array of objects\n    {\n      \"id\": number,\n      \"institution\": string,\n      \"degree\": string,\n      \"field_of_study\": string,\n      \"grade\": string, // GPA, CGPA, Percentage, etc.\n      \"grade_type\": string, // \"GPA\", \"CGPA\", \"Percentage\"\n      \"start_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"end_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"is_current\": boolean,\n      \"location\": string,\n      \"description\": string,\n      \"achievements\": array, // array of strings\n      \"coursework\": array, // array of strings\n      \"honors\": array, // array of strings\n      \"thesis\": string,\n      \"advisor\": string,\n      \"activities\": array // array of strings\n    }\n  ],\n  \n  \"experience\": [ // array of objects\n    {\n      \"id\": number,\n      \"job_title\": string,\n      \"company\": string,\n      \"department\": string,\n      \"location\": string,\n      \"start_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"end_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"is_current\": boolean,\n      \"employment_type\": string, // Full-time, Part-time, Contract, Internship\n      \"description\": string,\n      \"responsibilities\": array, // array of strings\n      \"achievements\": array, // array of strings\n      \"technologies_used\": array, // array of strings\n      \"supervisor\": string,\n      \"salary\": string,\n      \"reason_for_leaving\": string,\n      \"skills\": array, // array of strings\n      \"projects\": array // array of strings\n    }\n  ],\n  \n  \"skills\": {\n    \"technical\": [ // array of objects\n      {\n        \"name\": string,\n        \"level\": string, // Beginner, Intermediate, Advanced, Expert\n        \"years_of_experience\": number,\n        \"category\": string // Programming, Database, Cloud, etc.\n      }\n    ],\n    \"soft\": [ // array of objects\n      {\n        \"name\": string,\n        \"level\": string,\n        \"description\": string\n      }\n    ],\n    \"languages\": [ // array of objects\n      {\n        \"name\": string,\n        \"proficiency\": string, // Native, Fluent, Conversational, Basic\n        \"speaking\": string,\n        \"writing\": string,\n        \"reading\": string\n      }\n    ],\n    \"tools\": array, // array of strings\n    \"frameworks\": array, // array of strings\n    \"libraries\": array, // array of strings\n    \"databases\": array, // array of strings\n    \"cloud_platforms\": array, // array of strings\n    \"operating_systems\": array, // array of strings\n    \"methodologies\": array, // array of strings\n    \"industry\": array // array of strings\n  },\n  \n  \"projects\": [ // array of objects\n    {\n      \"id\": number,\n      \"name\": string,\n      \"description\": string,\n      \"role\": string,\n      \"start_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"end_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"is_current\": boolean,\n      \"technologies\": array, // array of strings\n      \"features\": array, // array of strings\n      \"achievements\": array, // array of strings\n      \"url\": string,\n      \"github_url\": string,\n      \"demo_url\": string,\n      \"category\": string, // Web, Mobile, Desktop, AI/ML, etc.\n      \"status\": string, // Completed, In Progress, Planned\n      \"team_size\": number,\n      \"client\": string,\n      \"budget\": string,\n      \"challenges\": array, // array of strings\n      \"learnings\": array // array of strings\n    }\n  ],\n  \n  \"certifications\": [ // array of objects\n    {\n      \"id\": number,\n      \"name\": string,\n      \"issuing_organization\": string,\n      \"issue_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"expiry_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"credential_id\": string,\n      \"url\": string,\n      \"description\": string,\n      \"skills\": array, // array of strings\n      \"verification_url\": string,\n      \"score\": string,\n      \"is_active\": boolean\n    }\n  ],\n  \n  \"publications\": [ // array of objects\n    {\n      \"id\": number,\n      \"title\": string,\n      \"authors\": array, // array of strings\n      \"journal\": string,\n      \"publisher\": string,\n      \"publication_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"volume\": string,\n      \"issue\": string,\n      \"pages\": string,\n      \"doi\": string,\n      \"url\": string,\n      \"abstract\": string,\n      \"keywords\": array, // array of strings\n      \"citation_count\": number,\n      \"type\": string, // Journal, Conference, Book, etc.\n      \"status\": string // Published, Under Review, Draft\n    }\n  ],\n  \n  \"awards\": [ // array of objects\n    {\n      \"id\": number,\n      \"title\": string,\n      \"issuing_organization\": string,\n      \"date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"description\": string,\n      \"category\": string, // Academic, Professional, Competition\n      \"level\": string, // International, National, Regional, Local\n      \"rank\": string,\n      \"prize\": string,\n      \"url\": string,\n      \"skills\": array // array of strings\n    }\n  ],\n  \n  \"languages\": [ // array of objects\n    {\n      \"id\": number,\n      \"name\": string,\n      \"proficiency\": string, // Native, Fluent, Conversational, Basic\n      \"speaking\": string,\n      \"writing\": string,\n      \"reading\": string,\n      \"listening\": string,\n      \"certification\": string,\n      \"test_score\": string,\n      \"years_of_experience\": number\n    }\n  ],\n  \n  \"volunteer\": [ // array of objects\n    {\n      \"id\": number,\n      \"organization\": string,\n      \"role\": string,\n      \"start_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"end_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"is_current\": boolean,\n      \"location\": string,\n      \"description\": string,\n      \"achievements\": array, // array of strings\n      \"skills\": array, // array of strings\n      \"hours_per_week\": number,\n      \"total_hours\": number,\n      \"cause\": string,\n      \"website\": string\n    }\n  ],\n  \n  \"leadership\": [ // array of objects\n    {\n      \"id\": number,\n      \"title\": string,\n      \"organization\": string,\n      \"start_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"end_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"is_current\": boolean,\n      \"location\": string,\n      \"description\": string,\n      \"responsibilities\": array, // array of strings\n      \"achievements\": array, // array of strings\n      \"team_size\": number,\n      \"budget\": string,\n      \"skills\": array, // array of strings\n      \"type\": string // Professional, Academic, Community\n    }\n  ],\n  \n  \"references\": [ // array of objects\n    {\n      \"id\": number,\n      \"name\": string,\n      \"title\": string,\n      \"company\": string,\n      \"email\": string,\n      \"phone\": string,\n      \"relationship\": string,\n      \"years_known\": number,\n      \"linkedin\": string,\n      \"can_contact\": boolean,\n      \"note\": string\n    }\n  ],\n  \n  \"courses\": [ // array of objects\n    {\n      \"id\": number,\n      \"name\": string,\n      \"provider\": string,\n      \"instructor\": string,\n      \"completion_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"duration\": string,\n      \"grade\": string,\n      \"credential_id\": string,\n      \"url\": string,\n      \"description\": string,\n      \"skills\": array, // array of strings\n      \"category\": string,\n      \"is_online\": boolean,\n      \"certificate\": string\n    }\n  ],\n  \n  \"research\": [ // array of objects\n    {\n      \"id\": number,\n      \"title\": string,\n      \"institution\": string,\n      \"supervisor\": string,\n      \"start_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"end_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"is_current\": boolean,\n      \"field\": string,\n      \"description\": string,\n      \"methodology\": array, // array of strings\n      \"findings\": array, // array of strings\n      \"publications\": array, // array of strings\n      \"technologies\": array, // array of strings\n      \"funding\": string,\n      \"collaborators_count\": number\n    }\n  ],\n  \n  \"patents\": [ // array of objects\n    {\n      \"id\": number,\n      \"title\": string,\n      \"patent_number\": string,\n      \"application_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"issue_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"status\": string, // Pending, Granted, Expired\n      \"inventors\": array, // array of strings\n      \"assignee\": string,\n      \"country\": string,\n      \"description\": string,\n      \"claims\": array, // array of strings\n      \"url\": string,\n      \"field\": string\n    }\n  ],\n  \n  \"conferences\": [ // array of objects\n    {\n      \"id\": number,\n      \"title\": string,\n      \"event\": string,\n      \"location\": string,\n      \"date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"type\": string, // Presenter, Attendee, Organizer\n      \"presentation_type\": string, // Oral, Poster, Workshop\n      \"abstract\": string,\n      \"audience\": string,\n      \"url\": string,\n      \"co_authors\": array, // array of strings\n      \"awards\": array // array of strings\n    }\n  ],\n  \n  \"portfolio\": [ // array of objects\n    {\n      \"id\": number,\n      \"title\": string,\n      \"type\": string, // Image, Video, Document, Website, etc.\n      \"url\": string,\n      \"thumbnail_url\": string,\n      \"description\": string,\n      \"category\": string,\n      \"tags\": array, // array of strings\n      \"date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n      \"client\": string,\n      \"technologies\": array, // array of strings\n      \"is_public\": boolean\n    }\n  ],\n  \n  \"hobbies\": array, // array of strings\n  \n  \"additional_info\": {\n    \"availability\": string,\n    \"notice_period\": string,\n    \"salary\": string,\n    \"willing_to_relocate\": boolean,\n    \"willing_to_travel\": string,\n    \"work_authorization\": string,\n    \"security_clearance\": string,\n    \"driving_license\": string,\n    \"military_service\": string,\n    \"disabilities\": string,\n    \"emergency_contact\": string,\n    \"preferred_location\": string,\n    \"remote_work\": boolean,\n    \"part_time\": boolean,\n    \"freelance\": boolean,\n    \"start_date\": string, // ISO 8601 datetime format or null (2006-01-02T15:04:05Z07:00 should look like this format)\n    \"personal_statement\": string,\n    \"career_goals\": string,\n    \"professional_memberships\": array, // array of strings\n    \"board_positions\": array, // array of strings\n    \"media_appearances\": array, // array of strings\n    \"speaking_engagements\": array, // array of strings\n    \"test_scores\": object, // map of string to string\n    \"custom_fields\": object // map of string to any type\n  }\n}\n```\n\nExtract and structure the data exactly as it appears in the text, maintaining accuracy and completeness while following this JSON schema structure. Return ONLY the JSON object in stringify format without any code block."
