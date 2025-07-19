@@ -9,10 +9,16 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 )
 
 func MakeAgentCall(prompt string) string {
-	apiKey := "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"
+	// Get the API key from environment variable
+	apiKey := os.Getenv("GROQ_API_KEY")
+	if apiKey == "" {
+		log.Println("GROQ_API_KEY not set in environment")
+		return "API key not set"
+	}
 	url := "https://api.groq.com/openai/v1/chat/completions"
 
 	requestBody := map[string]interface{}{
