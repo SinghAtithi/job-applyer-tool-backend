@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"example.com/pkg/dotEnvPackage"
 	"gopkg.in/yaml.v3"
 	"log"
@@ -14,6 +15,14 @@ type ApplicationConfig struct {
 	Logging     struct {
 		Level string `yaml:"level" default:"info"`
 	} `yaml:"logging"`
+}
+
+// AgentClient holds Groq API configuration loaded from environment variables and YAML config
+// It merges secure values from .env and YAML, prioritizing environment variables for secrets.
+type AgentClient struct {
+	APIKey  string // API key for Groq (from env)
+	BaseURL string // Base URL for Groq API (from YAML or default)
+	Model   string // Model name (from YAML or default)
 }
 
 func NewApplicationConfig() *ApplicationConfig {
@@ -49,6 +58,20 @@ func getConfigPath() string {
 	return filepath.Join(workingDir, "configs", "production.yaml")
 }
 
+func getConfigFilePath() string {
+	// Check if CONFIG_PATH is set in environment variables
+	if configPath := os.Getenv("CONFIG_PATH"); configPath != "" {
+		return configPath
+	}
+
+	// Default to relative path from project root
+	workingDir, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("❌ Failed to get working directory: %v", err)
+	}
+	return filepath.Join(workingDir, "configs", "production.yaml")
+}
+
 func readYamlFile(filePath string, target interface{}) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -60,4 +83,30 @@ func readYamlFile(filePath string, target interface{}) {
 
 func (c *ApplicationConfig) GetPort() string {
 	return c.Port
+}
+
+// LoadAgentClient loads Groq configuration securely by merging YAML config and environment variables.
+// Environment variables take precedence for secrets like API keys.
+func LoadAgentClient() (*AgentClient, error) {
+	// Load YAML config
+	tmp := struct {
+		BaseURL string `yaml:"agent.base_url"`
+		Model   string `yaml:"agent.model"`
+	}{
+		BaseURL: "https://api.groq.com/openai/v1/chat/completions", // default
+		Model:   "deepseek-r1-distill-llama-70b",                   // default
+	}
+	readYamlFile(getConfigFilePath(), &tmp)
+
+	// Load API key from environment
+	apiKey := os.Getenv("GROQ_API_KEY")
+	if apiKey == "" {
+		return nil, errors.New("GROQ_API_KEY not set in environment")
+	}
+
+	return &AgentClient{
+		APIKey:  apiKey,
+		BaseURL: tmp.BaseURL,
+		Model:   tmp.Model,
+	}, nil
 }

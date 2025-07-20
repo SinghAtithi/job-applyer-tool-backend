@@ -1,8 +1,7 @@
 package handler
 
 import (
-	"example.com/api/handler/helper"
-	"log"
+	"example.com/helper"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -24,13 +23,13 @@ func (h *ResumeHandler) GetResume(c *gin.Context) {
 }
 
 func (h *ResumeHandler) CreateResume(c *gin.Context) {
-	resume, err := helper.HandleCreateResume(c)
+	//There are two options, either pass the entire file as a multipart form or just the text content.
+	resumeInJson, err := helper.HandleParseResume(c)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		log.Println("Error while making POST operation in Resume" + err.Error())
 		return
 	}
-	c.JSON(http.StatusCreated, resume)
+	c.JSON(http.StatusCreated, gin.H{"message": "CreateResume", "resume": resumeInJson})
 }
 
 func (h *ResumeHandler) UpdateResume(c *gin.Context) {
