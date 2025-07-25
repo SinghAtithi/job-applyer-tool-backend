@@ -5,6 +5,7 @@ import (
 	"example.com/pkg/dotEnvPackage"
 	"gopkg.in/yaml.v3"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 )
@@ -88,13 +89,14 @@ func (c *ApplicationConfig) GetPort() string {
 // LoadAgentClient loads Groq configuration securely by merging YAML config and environment variables.
 // Environment variables take precedence for secrets like API keys.
 func LoadAgentClient() (*AgentClient, error) {
+	models := GetAllAIModelNames()
 	// Load YAML config
 	tmp := struct {
 		BaseURL string `yaml:"agent.base_url"`
 		Model   string `yaml:"agent.model"`
 	}{
 		BaseURL: "https://api.groq.com/openai/v1/chat/completions", // default
-		Model:   "deepseek-r1-distill-llama-70b",                   // default
+		Model:   models[rand.Intn(len(models))],                    // default
 	}
 	readYamlFile(getConfigFilePath(), &tmp)
 

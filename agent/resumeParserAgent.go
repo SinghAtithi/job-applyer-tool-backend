@@ -14,6 +14,7 @@ import (
 
 func GetPersonalInfoInJsonFormat(resumeDetails string) (*models.PersonalInfo, error) {
 	client := GetClientForResumeParserAgent()
+	log.Printf("Model used for parsing Personal Info %v", client.config.Model)
 
 	req := &ChatRequest{
 		Messages: []Message{
@@ -60,6 +61,8 @@ func GetPersonalInfoInJsonFormat(resumeDetails string) (*models.PersonalInfo, er
 
 func GetEducationInJsonFormat(resumeDetails string) ([]models.Education, error) {
 	client := GetClientForResumeParserAgent()
+
+	log.Printf("Model used for parsing Education %v", client.config.Model)
 
 	req := &ChatRequest{
 		Messages: []Message{
@@ -111,6 +114,7 @@ func GetEducationInJsonFormat(resumeDetails string) ([]models.Education, error) 
 func GetExperienceInJsonFormat(resumeDetails string) ([]models.Experience, error) {
 	client := GetClientForResumeParserAgent()
 
+	log.Printf("Model used for parsing Experience %v", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -161,6 +165,7 @@ func GetExperienceInJsonFormat(resumeDetails string) ([]models.Experience, error
 func GetSkillsInJsonFormat(resumeDetails string) (*models.Skills, error) {
 	client := GetClientForResumeParserAgent()
 
+	log.Printf("Model used for parsing skills %v", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -207,6 +212,7 @@ func GetSkillsInJsonFormat(resumeDetails string) (*models.Skills, error) {
 func GetProjectsInJsonFormat(resumeDetails string) ([]models.Project, error) {
 	client := GetClientForResumeParserAgent()
 
+	log.Printf("Model used for parsing projects %v", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -257,6 +263,7 @@ func GetProjectsInJsonFormat(resumeDetails string) ([]models.Project, error) {
 func GetSummaryInJsonFormat(resumeDetails string) (string, error) {
 	client := GetClientForResumeParserAgent()
 
+	log.Printf("Model used for parsing summary %v", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -307,6 +314,7 @@ func GetSummaryInJsonFormat(resumeDetails string) (string, error) {
 func GetAdditionalInfoInJsonFormat(resumeDetails string) (*models.AdditionalInfo, error) {
 	client := GetClientForResumeParserAgent()
 
+	log.Printf("Model used for parsing additional info %v", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -353,6 +361,7 @@ func GetAdditionalInfoInJsonFormat(resumeDetails string) (*models.AdditionalInfo
 func GetHobbiesInJsonFormat(resumeDetails string) ([]string, error) {
 	client := GetClientForResumeParserAgent()
 
+	log.Printf("Model used for parsing hobbies %v", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -563,6 +572,7 @@ func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUI
 	if personalInfo, err := GetPersonalInfoInJsonFormat(resumeDetails); err != nil {
 		log.Printf("Error parsing personal info: %v", err)
 	} else if personalInfo != nil {
+		log.Printf("personal info parsing sucessfull")
 		resume.PersonalInfo = *personalInfo
 	}
 
@@ -570,6 +580,7 @@ func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUI
 	if education, err := GetEducationInJsonFormat(resumeDetails); err != nil {
 		log.Printf("Error parsing education: %v", err)
 	} else {
+		log.Printf("education parsing sucessfull")
 		resume.Education = education
 	}
 
@@ -577,6 +588,7 @@ func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUI
 	if experience, err := GetExperienceInJsonFormat(resumeDetails); err != nil {
 		log.Printf("Error parsing experience: %v", err)
 	} else {
+		log.Printf("experience parsing sucessfull")
 		resume.Experience = experience
 	}
 
@@ -584,6 +596,7 @@ func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUI
 	if skills, err := GetSkillsInJsonFormat(resumeDetails); err != nil {
 		log.Printf("Error parsing skills: %v", err)
 	} else {
+		log.Printf("skills parsing sucessfull")
 		resume.Skills = skills
 	}
 
@@ -591,6 +604,7 @@ func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUI
 	if projects, err := GetProjectsInJsonFormat(resumeDetails); err != nil {
 		log.Printf("Error parsing projects: %v", err)
 	} else {
+		log.Printf("projects parsing sucessfull")
 		resume.Projects = projects
 	}
 
@@ -598,6 +612,7 @@ func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUI
 	if summary, err := GetSummaryInJsonFormat(resumeDetails); err != nil {
 		log.Printf("Error parsing summary: %v", err)
 	} else {
+		log.Printf("summary parsing sucessfull")
 		resume.Summary = summary
 	}
 
@@ -605,6 +620,7 @@ func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUI
 	if additionalInfo, err := GetAdditionalInfoInJsonFormat(resumeDetails); err != nil {
 		log.Printf("Error parsing additional info: %v", err)
 	} else {
+		log.Printf("additional info parsing sucessfull")
 		resume.AdditionalInfo = additionalInfo
 	}
 
@@ -612,6 +628,7 @@ func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUI
 	if hobbies, err := GetHobbiesInJsonFormat(resumeDetails); err != nil {
 		log.Printf("Error parsing hobbies: %v", err)
 	} else {
+		log.Printf("hobbies parsing sucessfull")
 		resume.Hobbies = hobbies
 	}
 

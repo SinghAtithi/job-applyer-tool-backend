@@ -33,8 +33,8 @@ import (
 
 // Resume represents a user's resume, including metadata and comprehensive resume data.
 type Resume struct {
-	ID          uint      `json:"id" gorm:"primaryKey"`                                                          // Unique identifier for the resume
 	UserID      uuid.UUID `json:"user_id" gorm:"foreignKey:UserID;constraint:OnUpdate:CASCADE;OnDelete:CASCADE"` // Associated user ID
+	UserName    string    `json:"username"`                                                                      //UserName of the user
 	Title       string    `json:"title"`                                                                         // Title of the resume
 	Description string    `json:"description,omitempty"`                                                         // Optional description
 	FileType    string    `json:"file_type,omitempty"`                                                           // File type (e.g., PDF, DOCX)
@@ -83,7 +83,6 @@ type Address struct {
 
 // Education represents an educational qualification.
 type Education struct {
-	ID           uint       `json:"id,omitempty"`             // Unique identifier for the education entry
 	Institution  string     `json:"institution"`              // Name of the institution
 	Degree       string     `json:"degree"`                   // Degree or certification obtained
 	FieldOfStudy string     `json:"field_of_study,omitempty"` // Field of study or major
@@ -96,7 +95,6 @@ type Education struct {
 
 // WorkExperience represents a work experience entry.
 type Experience struct {
-	ID               uint       `json:"id,omitempty"`                                       // Unique identifier for the experience entry
 	JobTitle         string     `json:"job_title"`                                          // Job title
 	Company          string     `json:"company"`                                            // Company name
 	Role             string     `json:"role,omitempty"`                                     // Optional role description
@@ -132,7 +130,6 @@ type TechnicalSkill struct {
 
 // Project represents a project entry.
 type Project struct {
-	ID           uint       `json:"id,omitempty"`                                  // Unique identifier for the project
 	Name         string     `json:"name"`                                          // Project name
 	Description  string     `json:"description,omitempty"`                         // Optional project description
 	Technologies []string   `json:"technologies,omitempty" gorm:"serializer:json"` // List of technologies used

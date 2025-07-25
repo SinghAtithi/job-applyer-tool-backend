@@ -3,11 +3,12 @@ package routes
 import (
 	"example.com/api/handler"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
-func SetupRoutes(router *gin.Engine) {
+func SetupRoutes(router *gin.Engine, db *gorm.DB) {
 
-	userHandler := handler.NewUserHandler()
+	userHandler := handler.NewUserHandler(db)
 	// User routes
 	userRoutes := router.Group("/users")
 	{
@@ -19,7 +20,7 @@ func SetupRoutes(router *gin.Engine) {
 		userRoutes.DELETE("/:id", userHandler.DeleteUser)
 	}
 
-	resumeHandler := handler.NewResumeHandler()
+	resumeHandler := handler.NewResumeHandler(db)
 	// Resume routes
 	resumeRoutes := router.Group("/resumes")
 	{
@@ -30,4 +31,5 @@ func SetupRoutes(router *gin.Engine) {
 		resumeRoutes.PATCH("/:id", resumeHandler.PatchResume)
 		resumeRoutes.DELETE("/:id", resumeHandler.DeleteResume)
 	}
+
 }

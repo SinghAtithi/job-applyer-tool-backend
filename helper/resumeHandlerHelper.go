@@ -5,16 +5,31 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"gorm.io/gorm"
 	"io"
 	"log"
 	"mime/multipart"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"example.com/agent"
 	"example.com/internal/models"
 	"github.com/gin-gonic/gin"
+	_ "github.com/jackc/pgx"
 	"github.com/ledongthuc/pdf"
+	_ "github.com/lib/pq"
+	_ "gorm.io/driver/postgres"
+	_ "gorm.io/gorm"
 )
+
+type ResumeHandlerHelper struct {
+	db *gorm.DB
+}
+
+func NewResumeHandlerHelper(db *gorm.DB) *ResumeHandlerHelper {
+	return &ResumeHandlerHelper{db: db}
+}
 
 const (
 	MaxFileSize       = 10 << 20 // 10 MB
@@ -223,14 +238,6 @@ func (rp *ResumeParser) createUnmarshalError(err error) error {
 	}
 }
 
-// Public API functions for backward compatibility and ease of use
-
-// HandleCreateResume processes file upload and creates a Resume struct
-func HandleCreateResume(c *gin.Context) (models.Resume, error) {
-	parser := NewResumeParser()
-	return parser.ParseFromUpload(c)
-}
-
 // GetResumeSchemaFromJsonTyped converts JSON string to Resume struct
 func GetResumeSchemaFromJsonTyped(jsonStr string) (*models.Resume, error) {
 	parser := NewResumeParser()
@@ -255,7 +262,7 @@ func (rp *ResumeParser) ResumeToText(ctx *gin.Context) (string, error) {
 }
 
 // HandleParseResume placeholder for future implementation
-func HandleParseResume(ctx *gin.Context) (models.Resume, error) {
+func (h *ResumeHandlerHelper) HandleParseResume(ctx *gin.Context) (models.Resume, error) {
 	resumeParser := NewResumeParser()
 	resumeString, err := resumeParser.ResumeToText(ctx)
 	if err != nil {
@@ -307,4 +314,80 @@ func HandleParseResume(ctx *gin.Context) (models.Resume, error) {
 		return models.Resume{}, errors.New("failed to parse resume details after multiple attempts")
 	}
 	return *resumeDetailsObj, err
+}
+
+func (h *ResumeHandlerHelper) CommitResumeToDB(data models.Resume) (*models.Resume, error) {
+	if jsonData, err := json.MarshalIndent(data, "", "  "); err == nil {
+		log.Printf("%s", jsonData)
+	}
+	result := h.db.Create(&data)
+	if result.Error != nil {
+		log.Printf("ERRRRRRRRRRRROOORRRR" + result.Error.Error())
+		return nil, result.Error
+	}
+	return &data, nil
+}
+
+func (h *ResumeHandlerHelper) GetAllResume(c *gin.Context) ([]models.Resume, error) {
+	var resumes []models.Resume
+
+	queryString, args := createQueryStringFromQueryParams(c.Request.URL.Query(), "resumes")
+
+	// Use Raw() with Find() for SELECT queries
+	result := h.db.Raw(queryString, args...).Find(&resumes)
+	if result.Error != nil {
+		return []models.Resume{}, result.Error
+	}
+
+	return resumes, nil
+}
+
+func (h *ResumeHandlerHelper) GetResume(c *gin.Context) (models.Resume, error) {
+	var resumes []models.Resume
+
+	query := h.db.Model(&models.Resume{})
+
+	// Handle path parameters
+	if id := c.Param("id"); id != "" {
+		query = query.Where("user_name = ?", id)
+	}
+
+	// Handle query parameters
+	for key, values := range c.Request.URL.Query() {
+		for _, value := range values {
+			query = query.Where(key+" = ?", value)
+		}
+	}
+
+	query = query.Order("created_at desc")
+
+	result := query.First(&resumes)
+	if result.Error != nil {
+		return models.Resume{}, result.Error
+	}
+
+	return resumes[0], nil
+}
+
+func createQueryStringFromQueryParams(queryParam url.Values, tableName string) (string, []interface{}) {
+	queryString := "SELECT * FROM " + tableName
+	var args []interface{}
+
+	if len(queryParam) > 0 {
+		queryString += " WHERE "
+		var conditions []string
+		paramIndex := 1
+
+		for key, values := range queryParam {
+			for _, value := range values {
+				conditions = append(conditions, key+" = $"+strconv.Itoa(paramIndex))
+				args = append(args, value)
+				paramIndex++
+			}
+		}
+
+		queryString += strings.Join(conditions, " AND ")
+	}
+
+	return queryString, args
 }

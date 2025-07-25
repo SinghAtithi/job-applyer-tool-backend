@@ -80,7 +80,7 @@ func (c *ConfigAgentClient) ChatCompletion(ctx context.Context, req *ChatRequest
 	c.setHeaders(httpReq)
 
 	resp, err := c.httpClient.Do(httpReq)
-	logHTTPDetails(httpReq, resp) // Log request details
+	//logHTTPDetails(httpReq, resp) // Log request details
 	if err != nil {
 		return nil, fmt.Errorf("failed to make HTTP request: %w", err)
 	}

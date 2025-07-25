@@ -1,15 +1,20 @@
 package handler
 
 import (
+	grom "gorm.io/gorm"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-type UserHandler struct{}
+type UserHandler struct {
+	db *grom.DB
+}
 
-func NewUserHandler() *UserHandler {
-	return &UserHandler{}
+func NewUserHandler(db *grom.DB) *UserHandler {
+	return &UserHandler{
+		db: db,
+	}
 }
 
 func (h *UserHandler) GetAllUsers(c *gin.Context) {
