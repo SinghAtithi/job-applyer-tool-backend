@@ -20,15 +20,15 @@ func (h CoverLetterHandler) CreateCoverLetter(context *gin.Context) {
 
 	if err := context.BindJSON(&requestBody); err != nil || requestBody.URL == "" {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
 	}
 
 	coverLetterHelper := helper.NewCoverLetterHelper(h.db)
 
-	jobDescriptionData, isJobDescriptionPresent := coverLetterHelper.GetCoverLetterFromDB(requestBody.URL)
+	jobDescriptionData, isJobDescriptionPresent := coverLetterHelper.GetJobDescriptionFromDB(requestBody.URL)
 
 	var jobDescriptionContent string
 	var err error
-
 	if isJobDescriptionPresent {
 		jobDescriptionContent = jobDescriptionData.ContentInfo
 	} else {
@@ -36,11 +36,27 @@ func (h CoverLetterHandler) CreateCoverLetter(context *gin.Context) {
 		jobDescriptionContent, err = agent.GetJobDescription(requestBody.TextContent)
 		if err != nil {
 			context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 		coverLetterHelper.CommitJobDescription(jobDescriptionContent, requestBody.URL)
 	}
+	//userDetails, err = coverLetterHelper.GetUserDetails(requestBody.UserName)
+	coverLetter, err := coverLetterHelper.GetCoverLetter(jobDescriptionContent, requestBody.UserName, requestBody.URL)
 
-	context.JSON(http.StatusOK, requestBody)
+	if err != nil || coverLetter.ContentInfo == "" {
+		context.JSON(http.StatusBadRequest, gin.H{"error": "Unable to createCoverLetter"})
+		return
+	}
+
+	pdfBytes, err := coverLetterHelper.ReturnPDFResponse(coverLetter.ContentInfo)
+	if err != nil {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	coverLetterHelper.SetHeadersForPDf(context, pdfBytes)
+
+	// Return PDF as response
+	context.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
 func (h CoverLetterHandler) GetAllCoverLetters(context *gin.Context) {

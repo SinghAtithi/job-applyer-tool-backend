@@ -51,6 +51,7 @@ func EnsureTablesExist(db *gorm.DB) error {
 	err := db.AutoMigrate(
 		&models.Resume{},
 		&models.CoverLetterTable{},
+		&models.JobDescriptionTable{},
 	)
 
 	if err != nil {
