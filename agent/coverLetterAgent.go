@@ -8,7 +8,7 @@ import (
 
 func GetCoverLetterContent(jobDescription string) (string, error) {
 	client := GetClientForResumeParserAgent()
-	log.Printf("Model used for parsing Personal Info %v", client.config.Model)
+	log.Printf("Model used for parsing Cover Letter Info %v", client.config.Model)
 
 	req := &ChatRequest{
 		Messages: []Message{

@@ -8,6 +8,6 @@ type CoverLetterClientModel struct {
 }
 
 type CoverLetterModel struct {
-	URL         string `json:"url"`
+	URL         string `json:"url" gorm:"primaryKey"`
 	ContentInfo string `json:"contentInfo"`
 }

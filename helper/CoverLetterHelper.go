@@ -2,6 +2,7 @@ package helper
 
 import (
 	"example.com/internal/models"
+	"fmt"
 	grom "gorm.io/gorm"
 	"log"
 )
@@ -17,20 +18,25 @@ func NewCoverLetterHelper(db *grom.DB) *CoverLetterHelper {
 }
 
 func (cl *CoverLetterHelper) GetCoverLetterFromDB(url string) (models.CoverLetterModel, bool) {
-	var coverLetters []models.CoverLetterModel
+	var coverLetters models.CoverLetterModel
 
 	query := cl.db.Model(&models.CoverLetterModel{})
 
 	query = query.Where("url = ?", url)
+	fmt.Printf("Searching for URL: %s\n", url)
 
-	query = query.Order("created_at desc")
+	var count int64
+	cl.db.Model(&models.CoverLetterModel{}).Count(&count)
+	fmt.Printf("Total records in table: %d\n", count)
 
 	result := query.First(&coverLetters)
+
+	cl.db = cl.db.Debug()
 	if result.Error != nil {
 		return models.CoverLetterModel{}, false
 	}
 
-	return coverLetters[0], true
+	return coverLetters, true
 }
 
 func (cl *CoverLetterHelper) CommitCoverLetterToDB(content string, url string) {
