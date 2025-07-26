@@ -17,31 +17,31 @@ func NewCoverLetterHelper(db *grom.DB) *CoverLetterHelper {
 	}
 }
 
-func (cl *CoverLetterHelper) GetCoverLetterFromDB(url string) (models.CoverLetterModel, bool) {
-	var coverLetters models.CoverLetterModel
+func (cl *CoverLetterHelper) GetCoverLetterFromDB(url string) (models.CoverLetterTable, bool) {
+	var coverLetters models.CoverLetterTable
 
-	query := cl.db.Model(&models.CoverLetterModel{})
+	query := cl.db.Model(&models.CoverLetterTable{})
 
 	query = query.Where("url = ?", url)
 	fmt.Printf("Searching for URL: %s\n", url)
 
 	var count int64
-	cl.db.Model(&models.CoverLetterModel{}).Count(&count)
+	cl.db.Model(&models.CoverLetterTable{}).Count(&count)
 	fmt.Printf("Total records in table: %d\n", count)
 
 	result := query.First(&coverLetters)
 
 	cl.db = cl.db.Debug()
 	if result.Error != nil {
-		return models.CoverLetterModel{}, false
+		return models.CoverLetterTable{}, false
 	}
 
 	return coverLetters, true
 }
 
-func (cl *CoverLetterHelper) CommitCoverLetterToDB(content string, url string) {
+func (cl *CoverLetterHelper) CommitJobDescription(content string, url string) {
 
-	coverLetterData := models.CoverLetterModel{
+	coverLetterData := models.CoverLetterTable{
 		URL:         url,
 		ContentInfo: content,
 	}

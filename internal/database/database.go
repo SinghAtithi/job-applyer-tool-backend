@@ -50,7 +50,7 @@ func EnsureTablesExist(db *gorm.DB) error {
 	// and update schema if needed (adds new columns, indexes)
 	err := db.AutoMigrate(
 		&models.Resume{},
-		&models.CoverLetterModel{},
+		&models.CoverLetterTable{},
 	)
 
 	if err != nil {
