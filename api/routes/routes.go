@@ -32,4 +32,16 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB) {
 		resumeRoutes.DELETE("/:id", resumeHandler.DeleteResume)
 	}
 
+	coverLetterHandler := handler.NewCoverLetter(db)
+
+	coverLetterRoutes := router.Group("/coverLetter")
+	{
+		coverLetterRoutes.GET("/", coverLetterHandler.GetAllCoverLetters)
+		coverLetterRoutes.GET("/:id", coverLetterHandler.GetCoverLetter)
+		coverLetterRoutes.POST("/", coverLetterHandler.CreateCoverLetter)
+		coverLetterRoutes.PUT("/:id", coverLetterHandler.UpdateCoverLetter)
+		coverLetterRoutes.PATCH("/:id", coverLetterHandler.PatchCoverLetter)
+		coverLetterRoutes.DELETE("/:id", coverLetterHandler.DeleteCoverLetter)
+	}
+
 }

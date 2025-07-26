@@ -21,11 +21,20 @@ func main() {
 		log.Fatalf("Error connecting to database: %v", err)
 	}
 
+	err = database.EnsureTablesExist(db)
+
+	if err != nil {
+		log.Fatalf("Error connecting to database: %v", err)
+	}
+
 	router := gin.Default()
 
 	config := internalConfig.NewApplicationConfig()
 
 	routes.SetupRoutes(router, db)
 
-	router.Run(":" + config.GetPort())
+	err = router.Run(":" + config.GetPort())
+	if err != nil {
+		return
+	}
 }

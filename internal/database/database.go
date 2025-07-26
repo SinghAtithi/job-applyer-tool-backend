@@ -2,8 +2,10 @@ package database
 
 import (
 	_ "database/sql"
+	"example.com/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"log"
 )
 
 type Database struct {
@@ -41,4 +43,20 @@ func NewDatabase() (*gorm.DB, error) {
 	// Perform any necessary setup or migrations here
 
 	return db, nil
+}
+
+func EnsureTablesExist(db *gorm.DB) error {
+	// AutoMigrate will create tables if they don't exist
+	// and update schema if needed (adds new columns, indexes)
+	err := db.AutoMigrate(
+		&models.Resume{},
+		&models.CoverLetterModel{},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	log.Println("All tables ensured to exist")
+	return nil
 }
