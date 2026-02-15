@@ -12,6 +12,7 @@ import (
 
 	"example.com/api/middleware"
 	"example.com/api/routes"
+	"example.com/pkg/cache"
 	internalConfig "example.com/internal/config"
 	"example.com/internal/database"
 
@@ -34,6 +35,12 @@ func main() {
 	// Ensure tables exist
 	if err := database.EnsureTablesExist(db); err != nil {
 		log.Fatalf("Error creating tables: %v", err)
+	}
+
+	// Initialize Redis cache
+	cacheConfig := cache.DefaultCacheConfig()
+	if err := cache.InitializeRedis(cacheConfig); err != nil {
+		log.Printf("Warning: Failed to connect to Redis: %v. Running without cache.", err)
 	}
 
 	// Create router with custom configuration
