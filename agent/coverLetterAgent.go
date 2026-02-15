@@ -109,12 +109,13 @@ Align the applicant's qualifications with the job requirements from the descript
 Explain how the applicant's background can benefit the specific role
 Maintain a professional and confident tone throughout
 Critical Instructions:
-Output ONLY the cover letter content
-No additional text, explanations, or commentary
-No greetings like "Here's your cover letter" or similar phrases
-Start directly with the cover letter opening
-End with the cover letter closing
-The response will be used directly for PDF generation
+- Output ONLY the cover letter content in English using standard characters and punctuation
+- No additional text, explanations, or commentary
+- No greetings like "Here's your cover letter" or similar phrases
+- Start directly with the cover letter opening
+- End with the cover letter closing
+- The response will be used directly for PDF generation
+- There should be no placeholder, everything is present in the json object, get the details from there
 Format:
 The cover letter should follow standard business format with proper paragraph structure and professional language.
 `

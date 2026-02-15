@@ -2,14 +2,15 @@ package config
 
 import (
 	"errors"
-	"example.com/pkg/dotEnvPackage"
-	"gopkg.in/yaml.v3"
-	"log"
+	"fmt"
 	"math/rand"
 	"os"
-	"path/filepath"
+
+	publicPackage "example.com/pkg/dotEnvPackage"
+	"gopkg.in/yaml.v3"
 )
 
+// ApplicationConfig represents the main application configuration
 type ApplicationConfig struct {
 	Port        string `yaml:"port" default:"8080"`
 	Environment string `yaml:"environment" default:"production"`
@@ -26,62 +27,58 @@ type AgentClient struct {
 	Model   string // Model name (from YAML or default)
 }
 
-func NewApplicationConfig() *ApplicationConfig {
+// NewApplicationConfig creates a new application configuration
+func NewApplicationConfig() (*ApplicationConfig, error) {
 	config := &ApplicationConfig{}
 	configPath := getConfigPath()
 
-	readYamlFile(configPath, config)
-	return config
+	if err := readYamlFile(configPath, config); err != nil {
+		if os.IsNotExist(err) {
+			// Use defaults if file not found
+			config.Port = "8080"
+			config.Environment = "production"
+			config.Logging.Level = "info"
+		} else {
+			// Propagate parse or IO errors so callers can decide
+			return nil, fmt.Errorf("failed to load config from %s: %w", configPath, err)
+		}
+	}
+	return config, nil
 }
 
+// getConfigPath determines the configuration file path based on environment
 func getConfigPath() string {
+	// Load .env file if exists
+	_ = publicPackage.LoadDotEnvFile(".env")
 
-	err := publicPackage.LoadDotEnvFile(".env")
-	if err != nil {
-		log.Println("No .env file found or failed to load")
-	}
-
-	if configPath := os.Getenv("CONFIG_PATH"); configPath != "" {
-		return os.Getenv("CONFIG_PATH")
-	}
-
-	// Default to relative config path from project root
-	workingDir, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("❌ Failed to get working directory: %v", err)
-	}
-	configMode := os.Getenv("CONFIG_MODE")
-	if configMode == "development" {
-		// Default to development config path
-		return filepath.Join(workingDir, "configs", "development.yaml")
-	}
-
-	return filepath.Join(workingDir, "configs", "production.yaml")
-}
-
-func getConfigFilePath() string {
-	// Check if CONFIG_PATH is set in environment variables
+	// Check for explicit config path
 	if configPath := os.Getenv("CONFIG_PATH"); configPath != "" {
 		return configPath
 	}
 
-	// Default to relative path from project root
-	workingDir, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("❌ Failed to get working directory: %v", err)
+	// Use config mode or default to production
+	configMode := os.Getenv("CONFIG_MODE")
+	if configMode == "development" {
+		return "configs/development.yaml"
 	}
-	return filepath.Join(workingDir, "configs", "production.yaml")
+
+	return "configs/production.yaml"
 }
 
-func readYamlFile(filePath string, target interface{}) {
+// readYamlFile reads and unmarshals a YAML file
+func readYamlFile(filePath string, target interface{}) error {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		log.Fatalf("❌ Failed to read YAML file: %v", err)
+		return fmt.Errorf("failed to read YAML file: %w", err)
 	}
 
-	err = yaml.Unmarshal(data, target)
+	if err := yaml.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("failed to unmarshal YAML: %w", err)
+	}
+	return nil
 }
 
+// GetPort returns the configured port
 func (c *ApplicationConfig) GetPort() string {
 	return c.Port
 }
@@ -90,17 +87,32 @@ func (c *ApplicationConfig) GetPort() string {
 // Environment variables take precedence for secrets like API keys.
 func LoadAgentClient() (*AgentClient, error) {
 	models := GetAllAIModelNames()
-	// Load YAML config
-	tmp := struct {
-		BaseURL string `yaml:"agent.base_url"`
-		Model   string `yaml:"agent.model"`
-	}{
-		BaseURL: "https://api.groq.com/openai/v1/chat/completions", // default
-		Model:   models[rand.Intn(len(models))],                    // default
+	modelName := ""
+	if len(models) > 0 {
+		modelName = models[rand.Intn(len(models))]
+	} else {
+		// safe default if no models registered
+		modelName = "gpt-default"
 	}
-	readYamlFile(getConfigFilePath(), &tmp)
 
-	// Load API key from environment
+	// Default configuration
+	cfg := struct {
+		BaseURL string `yaml:"agent_base_url"`
+		Model   string `yaml:"agent_model"`
+	}{
+		BaseURL: "https://api.groq.com/openai/v1/chat/completions",
+		Model:   modelName,
+	}
+
+	// Try to read from config file and propagate any non-not-found errors
+	if err := readYamlFile(getConfigPath(), &cfg); err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read agent config: %w", err)
+		}
+		// file not found -> continue with defaults
+	}
+
+	// Load API key from environment (required)
 	apiKey := os.Getenv("GROQ_API_KEY")
 	if apiKey == "" {
 		return nil, errors.New("GROQ_API_KEY not set in environment")
@@ -108,7 +120,7 @@ func LoadAgentClient() (*AgentClient, error) {
 
 	return &AgentClient{
 		APIKey:  apiKey,
-		BaseURL: tmp.BaseURL,
-		Model:   tmp.Model,
+		BaseURL: cfg.BaseURL,
+		Model:   cfg.Model,
 	}, nil
 }

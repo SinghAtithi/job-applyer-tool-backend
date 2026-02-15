@@ -1,0 +1,921 @@
+openapi: 3.0.3
+info:
+  title: Job Applyer Tool API
+  description: |
+    REST API for the Job Applyer Tool backend application.
+    
+    This API provides endpoints for managing users, resumes, and cover letters.
+    
+    ## Authentication
+    Currently, no authentication is required. This may be added in future versions.
+    
+    ## Response Format
+    All responses follow a standard format:
+    ```json
+    {
+      "success": true,
+      "message": "Success message",
+      "data": { ... }
+    }
+    ```
+    
+    ## Error Response Format
+    ```json
+    {
+      "success": false,
+      "error": {
+        "code": "ERROR_CODE",
+        "message": "Error message",
+        "details": "Additional details"
+      }
+    }
+    ```
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Users
+    description: User management operations
+  - name: Resumes
+    description: Resume management operations
+  - name: Cover Letters
+    description: Cover letter generation and management operations
+
+paths:
+  /users/:
+    get:
+      tags:
+        - Users
+      summary: Get all users
+      description: Retrieves a paginated list of all users
+      parameters:
+        - name: page
+          in: query
+          description: Page number (default: 1)
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: page_size
+          in: query
+          description: Number of items per page (default: 10, max: 100)
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+      responses:
+        '200':
+          description: Successfully retrieved users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUsersResponse'
+              example:
+                success: true
+                message: Users retrieved successfully
+                data:
+                  data:
+                    - id: 1
+                      name: John Doe
+                      email: john@example.com
+                      created_at: "2025-01-15T10:30:00Z"
+                      updated_at: "2025-01-15T10:30:00Z"
+                  page: 1
+                  page_size: 10
+                  total: 1
+                  total_pages: 1
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: DATABASE_ERROR
+                  message: Failed to fetch users
+                  details: "connection refused"
+    post:
+      tags:
+        - Users
+      summary: Create a new user
+      description: Creates a new user with the provided information
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+            examples:
+              valid_request:
+                summary: Valid user creation request
+                value:
+                  name: John Doe
+                  email: john@example.com
+                  password: securePassword123
+              missing_name:
+                summary: Missing name (will fail)
+                value:
+                  email: john@example.com
+                  password: securePassword123
+              missing_email:
+                summary: Missing email (will fail)
+                value:
+                  name: John Doe
+                  password: securePassword123
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              example:
+                success: true
+                message: User created successfully
+                data:
+                  id: 1
+                  name: John Doe
+                  email: john@example.com
+                  created_at: "2025-01-15T10:30:00Z"
+                  updated_at: "2025-01-15T10:30:00Z"
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: VALIDATION_ERROR
+                  message: Name is required
+                  details: ""
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Get user by ID
+      description: Retrieves a specific user by their ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              example:
+                success: true
+                message: User retrieved successfully
+                data:
+                  id: 1
+                  name: John Doe
+                  email: john@example.com
+                  created_at: "2025-01-15T10:30:00Z"
+                  updated_at: "2025-01-15T10:30:00Z"
+        '400':
+          description: Invalid ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: INVALID_ID
+                  message: Invalid user ID format
+                  details: ""
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: NOT_FOUND
+                  message: User not found
+                  details: ""
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Users
+      summary: Update user
+      description: Updates an existing user with the provided information
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            example:
+              name: John Updated
+              email: john.updated@example.com
+              password: newPassword123
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              example:
+                success: true
+                message: User updated successfully
+                data:
+                  id: 1
+                  name: John Updated
+                  email: john.updated@example.com
+                  created_at: "2025-01-15T10:30:00Z"
+                  updated_at: "2025-01-15T11:00:00Z"
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Users
+      summary: Partially update user
+      description: Updates specific fields of an existing user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+            examples:
+              update_name:
+                summary: Update only name
+                value:
+                  name: John Patched
+              update_email:
+                summary: Update only email
+                value:
+                  email: patched@example.com
+      responses:
+        '200':
+          description: User patched successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+              example:
+                success: true
+                message: User patched successfully
+                data:
+                  id: 1
+                  name: John Patched
+                  email: john@example.com
+                  created_at: "2025-01-15T10:30:00Z"
+                  updated_at: "2025-01-15T11:30:00Z"
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Users
+      summary: Delete user
+      description: Deletes a user by their ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                message: User deleted successfully
+                data: null
+        '400':
+          description: Invalid ID format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /resumes/:
+    get:
+      tags:
+        - Resumes
+      summary: Get all resumes
+      description: Retrieves a list of all resumes
+      responses:
+        '200':
+          description: Successfully retrieved resumes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Resume'
+              example:
+                - user_id: "550e8400-e29b-41d4-a716-446655440000"
+                  username: johndoe
+                  title: Software Engineer Resume
+                  description: Professional resume for software engineering positions
+                  file_type: PDF
+                  is_active: true
+                  created_at: "2025-01-15T10:30:00Z"
+                  updated_at: "2025-01-15T10:30:00Z"
+                  personal_info:
+                    first_name: John
+                    last_name: Doe
+                    email: john@example.com
+                    phone: "+1-555-123-4567"
+                    address:
+                      street: "123 Main St"
+                      city: San Francisco
+                      state: CA
+                      country: USA
+                      postal_code: "94102"
+                    linkedin: "https://linkedin.com/in/johndoe"
+                    github: "https://github.com/johndoe"
+                  summary: Experienced software engineer with 5+ years of experience
+                  education:
+                    - institution: Stanford University
+                      degree: Bachelor's
+                      field_of_study: Computer Science
+                      grade: "3.8"
+                      grade_type: GPA
+                      start_date: "2015-09-01T00:00:00Z"
+                      end_date: "2019-06-01T00:00:00Z"
+                      is_current: false
+                  experience:
+                    - job_title: Software Engineer
+                      company: Tech Corp
+                      location: San Francisco, CA
+                      start_date: "2019-07-01T00:00:00Z"
+                      is_current: true
+                      employment_type: Full-time
+                      description: Working on distributed systems
+                      responsibilities:
+                        - Design and implement APIs
+                        - Code review
+                      achievements:
+                        - Improved system performance by 40%
+                      technologies_used:
+                        - Go
+                        - Python
+                        - Kubernetes
+                  skills:
+                    technical:
+                      - name: Go
+                        level: Expert
+                        experience: 5
+                        category: Programming
+                      - name: Python
+                        level: Advanced
+                        experience: 4
+                        category: Programming
+                    tools:
+                      - Docker
+                      - Git
+                    frameworks:
+                      - Gin
+                      - Django
+                    databases:
+                      - PostgreSQL
+                      - MongoDB
+                    cloud_platforms:
+                      - AWS
+                      - GCP
+                  projects:
+                    - name: Open Source Project
+                      description: Contributed to various open source projects
+                      technologies:
+                        - Go
+                        - Rust
+                      url: "https://github.com/johndoe/project"
+                      start_date: "2020-01-01T00:00:00Z"
+                      is_current: true
+                  hobbies:
+                    - Reading
+                    - Hiking
+                  additional_info:
+                    availability: Immediately
+                    notice_period: "2 weeks"
+                    remote_work: true
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              example:
+                error: Failed to fetch resumes
+                message: "connection refused"
+    post:
+      tags:
+        - Resumes
+      summary: Create a new resume
+      description: |
+        Creates a new resume. Supports two options:
+        1. Pass the entire file as a multipart form
+        2. Pass just the text content
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Resume file (PDF, DOCX)
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Resume'
+            example:
+              username: johndoe
+              title: Software Engineer Resume
+              personal_info:
+                first_name: John
+                last_name: Doe
+                email: john@example.com
+                phone: "+1-555-123-4567"
+              summary: Experienced software engineer
+              skills:
+                technical:
+                  - name: Go
+                    level: Expert
+                    experience: 5
+      responses:
+        '201':
+          description: Resume created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  resume:
+                    $ref: '#/components/schemas/Resume'
+              example:
+                message: CreateResume
+                resume:
+                  user_id: "550e8400-e29b-41d4-a716-446655440000"
+                  username: johndoe
+                  title: Software Engineer Resume
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              example:
+                error: Invalid request
+
+  /resumes/{id}:
+    get:
+      tags:
+        - Resumes
+      summary: Get resume by ID
+      description: Retrieves a specific resume by its ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Resume ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Resume found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Resume'
+        '404':
+          description: Resume not found
+        '500':
+          description: Internal server error
+
+  /coverLetter/:
+    get:
+      tags:
+        - Cover Letters
+      summary: Get all cover letters
+      description: Retrieves a list of all cover letters
+      responses:
+        '200':
+          description: Successfully retrieved cover letters
+          content:
+            application/json:
+              example:
+                - url: "https://example.com/job/123"
+                  contentInfo: "Cover letter content..."
+                  userName: johndoe
+        '500':
+          description: Internal server error
+    post:
+      tags:
+        - Cover Letters
+      summary: Create a new cover letter
+      description: |
+        Creates a new cover letter based on job description URL or text content.
+        Returns a PDF of the generated cover letter.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverLetterRequest'
+            examples:
+              with_url:
+                summary: Create with job URL
+                value:
+                  url: "https://example.com/job/123"
+                  userName: johndoe
+              with_text:
+                summary: Create with job text content
+                value:
+                  textContent: "We are looking for a Software Engineer..."
+                  userName: johndoe
+      responses:
+        '200':
+          description: PDF cover letter generated
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              example:
+                error: "Invalid request"
+
+  /coverLetter/{id}:
+    get:
+      tags:
+        - Cover Letters
+      summary: Get cover letter by ID
+      description: Retrieves a specific cover letter by its ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Cover letter ID
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Cover letter found
+          content:
+            application/json:
+              example:
+                url: "https://example.com/job/123"
+                contentInfo: "Example Content"
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        password:
+          type: string
+          format: password
+          example: securePassword123
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+      required:
+        - name
+        - email
+        - password
+
+    CreateUserRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+      properties:
+        name:
+          type: string
+          example: John Doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        password:
+          type: string
+          format: password
+          example: securePassword123
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: John Updated
+        email:
+          type: string
+          format: email
+          example: john.updated@example.com
+        password:
+          type: string
+          format: password
+          example: newPassword123
+
+    UserResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: User retrieved successfully
+        data:
+          $ref: '#/components/schemas/User'
+
+    Resume:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        username:
+          type: string
+          example: johndoe
+        title:
+          type: string
+          example: Software Engineer Resume
+        description:
+          type: string
+          example: Professional resume
+        file_type:
+          type: string
+          example: PDF
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PersonalInfo:
+      type: object
+      properties:
+        first_name:
+          type: string
+        last_name:
+          type: string
+        middle_name:
+          type: string
+        title:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        website:
+          type: string
+        linkedin:
+          type: string
+        github:
+          type: string
+
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postal_code:
+          type: string
+
+    Skills:
+      type: object
+      properties:
+        technical:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechnicalSkill'
+        tools:
+          type: array
+          items:
+            type: string
+        frameworks:
+          type: array
+          items:
+            type: string
+        databases:
+          type: array
+          items:
+            type: string
+
+    TechnicalSkill:
+      type: object
+      properties:
+        name:
+          type: string
+        level:
+          type: string
+        experience:
+          type: integer
+        category:
+          type: string
+
+    CoverLetterRequest:
+      type: object
+      properties:
+        url:
+          type: string
+          description: Job posting URL
+          example: "https://example.com/job/123"
+        textContent:
+          type: string
+          description: Job description text content
+          example: "We are looking for a Software Engineer..."
+        userName:
+          type: string
+          description: User name for the cover letter
+          example: johndoe
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: ERROR_CODE
+            message:
+              type: string
+              example: Error message
+            details:
+              type: string
+              example: Additional details
+
+    PaginatedUsersResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Users retrieved successfully
+        data:
+          type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+            page:
+              type: integer
+              example: 1
+            page_size:
+              type: integer
+              example: 10
+            total:
+              type: integer
+              example: 100
+            total_pages:
+              type: integer
+              example: 10

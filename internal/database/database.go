@@ -1,53 +1,80 @@
 package database
 
 import (
-	_ "database/sql"
+	"fmt"
+	"log"
+	"net/url"
+	"os"
+
 	"example.com/internal/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"log"
 )
 
-type Database struct {
-	ConnectionString string
-	Port             string
-	Username         string
-	Password         string
-	DBName           string
-	SSLMode          string
+// DatabaseConfig holds database connection configuration
+type DatabaseConfig struct {
+	Host     string
+	Port     string
+	Username string
+	Password string
+	DBName   string
+	SSLMode  string
 }
 
-func getDBConnectionDetails() Database {
-	// This function should retrieve the database connection details from a configuration file or environment variables.
-	// For simplicity, we are returning a hardcoded example here.
-	return Database{
-		ConnectionString: "127.0.0.1",
-		Port:             "5432",
-		Username:         "ravan",
-		Password:         "Abcd@1234",
-		DBName:           "resumedb",
-		SSLMode:          "disable",
+// getDBConnectionDetails retrieves database configuration from environment variables
+func getDBConnectionDetails() DatabaseConfig {
+	return DatabaseConfig{
+		Host:     getEnv("DB_HOST", "127.0.0.1"),
+		Port:     getEnv("DB_PORT", "5432"),
+		Username: getEnv("DB_USERNAME", "postgres"),
+		Password: getEnv("DB_PASSWORD", ""),
+		DBName:   getEnv("DB_NAME", "resumedb"),
+		// Default to a secure SSL mode; change to 'disable' only if explicitly configured
+		SSLMode: getEnv("DB_SSL_MODE", "require"),
 	}
 }
 
-func NewDatabase() (*gorm.DB, error) {
-	dataBaseConnectionDetails := getDBConnectionDetails()
+// getEnv retrieves environment variable with fallback to default value
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
 
-	dsn := "host=" + dataBaseConnectionDetails.ConnectionString + " port=" + dataBaseConnectionDetails.Port + " user=" + dataBaseConnectionDetails.Username + " password=" + dataBaseConnectionDetails.Password + " dbname=" + dataBaseConnectionDetails.DBName + " sslmode=" + dataBaseConnectionDetails.SSLMode
+// NewDatabase creates a new database connection
+func NewDatabase() (*gorm.DB, error) {
+	dbConfig := getDBConnectionDetails()
+
+	// warn when SSL is explicitly disabled so it's auditable
+	if dbConfig.SSLMode == "disable" {
+		log.Println("Warning: DB SSL Mode is 'disable' — TLS is disabled for DB connections. Ensure this is intentional and auditable.")
+	}
+
+	// Build a URL-style DSN and ensure credentials are properly escaped
+	userinfo := url.UserPassword(dbConfig.Username, dbConfig.Password)
+	u := &url.URL{
+		Scheme: "postgres",
+		User:   userinfo,
+		Host:   fmt.Sprintf("%s:%s", dbConfig.Host, dbConfig.Port),
+		Path:   "/" + dbConfig.DBName,
+	}
+	q := u.Query()
+	q.Set("sslmode", dbConfig.SSLMode)
+	u.RawQuery = q.Encode()
+	dsn := u.String()
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
-	// Perform any necessary setup or migrations here
 
+	log.Println("Database connection established successfully")
 	return db, nil
 }
 
+// EnsureTablesExist creates tables if they don't exist using AutoMigrate
 func EnsureTablesExist(db *gorm.DB) error {
-	// AutoMigrate will create tables if they don't exist
-	// and update schema if needed (adds new columns, indexes)
 	err := db.AutoMigrate(
 		&models.Resume{},
 		&models.CoverLetterTable{},
@@ -55,7 +82,7 @@ func EnsureTablesExist(db *gorm.DB) error {
 	)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to auto migrate tables: %w", err)
 	}
 
 	log.Println("All tables ensured to exist")
