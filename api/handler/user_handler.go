@@ -1,16 +1,16 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 	"strconv"
 
 	"example.com/internal/dto"
 	"example.com/internal/models"
+	"example.com/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
-	gorm "gorm.io/gorm"
+	"gorm.io/gorm"
 )
 
 // UserHandler handles user-related HTTP requests
@@ -23,50 +23,104 @@ func NewUserHandler(db *gorm.DB) *UserHandler {
 	return &UserHandler{db: db}
 }
 
-// GetAllUsers retrieves all users with pagination
-func (h *UserHandler) GetAllUsers(c *gin.Context) {
-	// Parse pagination parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+// parseIDParam extracts and validates a uint ID from the ":id" URL parameter.
+// Returns the parsed ID and true on success, or sends an error response and returns false.
+func parseIDParam(c *gin.Context) (uint64, bool) {
+	raw := c.Param("id")
+	if raw == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse("INVALID_ID", "ID is required", ""))
+		return 0, false
+	}
 
-	// Validate pagination
-	if page < 1 {
+	id, err := strconv.ParseUint(raw, 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse("INVALID_ID", "Invalid ID format", ""))
+		return 0, false
+	}
+	return id, true
+}
+
+// fetchUserByID looks up a user by ID, sending the appropriate error response if not found.
+// Returns the user and true on success.
+func (h *UserHandler) fetchUserByID(c *gin.Context, userID uint64) (*models.User, bool) {
+	var user models.User
+	if err := h.db.First(&user, userID).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, dto.ErrorResponse("NOT_FOUND", "User not found", ""))
+			return nil, false
+		}
+		logger.Error("failed to fetch user (id=%d): %v", userID, err)
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
+			"DATABASE_ERROR", "Failed to fetch user", "An internal error occurred",
+		))
+		return nil, false
+	}
+	return &user, true
+}
+
+// GetAllUsers retrieves all users with pagination, sorting, and field selection
+func (h *UserHandler) GetAllUsers(c *gin.Context) {
+	var queryParams dto.QueryParams
+	if err := c.ShouldBindQuery(&queryParams); err != nil {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"VALIDATION_ERROR", "Invalid query parameters", err.Error(),
+		))
+		return
+	}
+
+	offset := queryParams.GetOffset()
+	limit := queryParams.GetLimit()
+	page := queryParams.Page
+	if page == 0 {
 		page = 1
 	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 10
+	pageSize := queryParams.PageSize
+	if pageSize == 0 {
+		pageSize = limit
 	}
 
-	// Calculate offset
-	offset := (page - 1) * pageSize
-
-	// Query users
 	var users []models.User
 	var total int64
 
-	// Get total count
 	if err := h.db.Model(&models.User{}).Count(&total).Error; err != nil {
-		log.Printf("failed to count users: %v", err)
+		logger.Error("failed to count users: %v", err)
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to count users",
-			"An internal error occurred",
+			"DATABASE_ERROR", "Failed to count users", "An internal error occurred",
 		))
 		return
 	}
 
-	// Get paginated results (deterministic ordering)
-	if err := h.db.Order("id ASC").Offset(offset).Limit(pageSize).Find(&users).Error; err != nil {
-		log.Printf("failed to fetch users: %v", err)
+	query := h.db.Model(&models.User{})
+
+	// Apply sorting
+	if sortField, isDesc := queryParams.GetSortFieldAndOrder(); sortField != "" {
+		order := "ASC"
+		if isDesc {
+			order = "DESC"
+		}
+		query = query.Order(sortField + " " + order)
+	} else {
+		query = query.Order("id ASC")
+	}
+
+	// Apply field selection
+	if fields := queryParams.GetFieldsSlice(); fields != nil {
+		query = query.Select(fields)
+	}
+
+	// Apply pagination
+	if offset > 0 || limit > 0 {
+		query = query.Offset(offset).Limit(limit)
+	}
+
+	if err := query.Find(&users).Error; err != nil {
+		logger.Error("failed to fetch users: %v", err)
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to fetch users",
-			"An internal error occurred",
+			"DATABASE_ERROR", "Failed to fetch users", "An internal error occurred",
 		))
 		return
 	}
 
-	// Return paginated response
 	c.JSON(http.StatusOK, dto.SuccessResponse(
 		dto.NewPaginatedResponse(users, page, pageSize, total),
 		"Users retrieved successfully",
@@ -75,43 +129,13 @@ func (h *UserHandler) GetAllUsers(c *gin.Context) {
 
 // GetUser retrieves a single user by ID
 func (h *UserHandler) GetUser(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_ID",
-			"User ID is required",
-			"",
-		))
+	userID, ok := parseIDParam(c)
+	if !ok {
 		return
 	}
 
-	// parse and validate id to avoid accidental WHERE clause injection
-	userID, err := strconv.ParseUint(id, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_ID",
-			"Invalid user ID format",
-			"",
-		))
-		return
-	}
-
-	var user models.User
-	if err := h.db.First(&user, userID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, dto.ErrorResponse(
-				"NOT_FOUND",
-				"User not found",
-				"",
-			))
-			return
-		}
-		log.Printf("failed to fetch user (id=%d): %v", userID, err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to fetch user",
-			"An internal error occurred",
-		))
+	user, ok := h.fetchUserByID(c, userID)
+	if !ok {
 		return
 	}
 
@@ -120,7 +144,6 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 
 // CreateUser creates a new user
 func (h *UserHandler) CreateUser(c *gin.Context) {
-	// bind to input DTO to avoid mass-assignment
 	var input struct {
 		Name     string `json:"name" binding:"required"`
 		Email    string `json:"email" binding:"required,email"`
@@ -128,21 +151,16 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"VALIDATION_ERROR",
-			"Invalid request body",
-			err.Error(),
+			"VALIDATION_ERROR", "Invalid request body", err.Error(),
 		))
 		return
 	}
 
-	// Hash password
 	hashed, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Printf("failed to hash password: %v", err)
+		logger.Error("failed to hash password: %v", err)
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"INTERNAL_ERROR",
-			"Failed to process request",
-			"An internal error occurred",
+			"INTERNAL_ERROR", "Failed to process request", "An internal error occurred",
 		))
 		return
 	}
@@ -154,11 +172,9 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	}
 
 	if err := h.db.Create(&user).Error; err != nil {
-		log.Printf("failed to create user: %v", err)
+		logger.Error("failed to create user: %v", err)
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to create user",
-			"An internal error occurred",
+			"DATABASE_ERROR", "Failed to create user", "An internal error occurred",
 		))
 		return
 	}
@@ -166,82 +182,44 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.SuccessResponse(user, "User created successfully"))
 }
 
-// UpdateUser updates an existing user
+// UpdateUser fully replaces an existing user
 func (h *UserHandler) UpdateUser(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_ID",
-			"User ID is required",
-			"",
-		))
+	userID, ok := parseIDParam(c)
+	if !ok {
 		return
 	}
 
-	// Parse ID
-	userID, err := strconv.ParseUint(id, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_ID",
-			"Invalid user ID format",
-			"",
-		))
+	user, ok := h.fetchUserByID(c, userID)
+	if !ok {
 		return
 	}
 
-	var user models.User
-	if err := h.db.First(&user, userID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, dto.ErrorResponse(
-				"NOT_FOUND",
-				"User not found",
-				"",
-			))
-			return
-		}
-		log.Printf("failed to fetch user (id=%d): %v", userID, err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to fetch user",
-			"An internal error occurred",
-		))
-		return
-	}
-
-	// Bind updated data
 	var updateData models.User
 	if err := c.ShouldBindJSON(&updateData); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"VALIDATION_ERROR",
-			"Invalid request body",
-			err.Error(),
+			"VALIDATION_ERROR", "Invalid request body", err.Error(),
 		))
 		return
 	}
 
-	// Update fields
 	user.Name = updateData.Name
 	user.Email = updateData.Email
 	if updateData.Password != "" {
 		hashed, err := bcrypt.GenerateFromPassword([]byte(updateData.Password), bcrypt.DefaultCost)
 		if err != nil {
-			log.Printf("failed to hash password: %v", err)
+			logger.Error("failed to hash password: %v", err)
 			c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-				"INTERNAL_ERROR",
-				"Failed to process request",
-				"An internal error occurred",
+				"INTERNAL_ERROR", "Failed to process request", "An internal error occurred",
 			))
 			return
 		}
 		user.Password = string(hashed)
 	}
 
-	if err := h.db.Save(&user).Error; err != nil {
-		log.Printf("failed to save updated user (id=%d): %v", userID, err)
+	if err := h.db.Save(user).Error; err != nil {
+		logger.Error("failed to update user (id=%d): %v", userID, err)
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to update user",
-			"An internal error occurred",
+			"DATABASE_ERROR", "Failed to update user", "An internal error occurred",
 		))
 		return
 	}
@@ -251,58 +229,24 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 // PatchUser partially updates a user
 func (h *UserHandler) PatchUser(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_ID",
-			"User ID is required",
-			"",
-		))
+	userID, ok := parseIDParam(c)
+	if !ok {
 		return
 	}
 
-	// Parse ID
-	userID, err := strconv.ParseUint(id, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_ID",
-			"Invalid user ID format",
-			"",
-		))
+	user, ok := h.fetchUserByID(c, userID)
+	if !ok {
 		return
 	}
 
-	var user models.User
-	if err := h.db.First(&user, userID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, dto.ErrorResponse(
-				"NOT_FOUND",
-				"User not found",
-				"",
-			))
-			return
-		}
-		log.Printf("failed to fetch user (id=%d): %v", userID, err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to fetch user",
-			"An internal error occurred",
-		))
-		return
-	}
-
-	// Bind patch data
 	var patchData map[string]interface{}
 	if err := c.ShouldBindJSON(&patchData); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"VALIDATION_ERROR",
-			"Invalid request body",
-			err.Error(),
+			"VALIDATION_ERROR", "Invalid request body", err.Error(),
 		))
 		return
 	}
 
-	// Apply patches
 	if name, ok := patchData["name"].(string); ok {
 		user.Name = name
 	}
@@ -310,26 +254,21 @@ func (h *UserHandler) PatchUser(c *gin.Context) {
 		user.Email = email
 	}
 	if password, ok := patchData["password"].(string); ok {
-		// Hash patched password before storing
 		hashed, herr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if herr != nil {
-			log.Printf("failed to hash patched password (id=%d): %v", userID, herr)
+			logger.Error("failed to hash patched password (id=%d): %v", userID, herr)
 			c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-				"INTERNAL_ERROR",
-				"Failed to process request",
-				"An internal error occurred",
+				"INTERNAL_ERROR", "Failed to process request", "An internal error occurred",
 			))
 			return
 		}
 		user.Password = string(hashed)
 	}
 
-	if err := h.db.Save(&user).Error; err != nil {
-		log.Printf("failed to save patched user (id=%d): %v", userID, err)
+	if err := h.db.Save(user).Error; err != nil {
+		logger.Error("failed to save patched user (id=%d): %v", userID, err)
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to update user",
-			"An internal error occurred",
+			"DATABASE_ERROR", "Failed to update user", "An internal error occurred",
 		))
 		return
 	}
@@ -339,52 +278,20 @@ func (h *UserHandler) PatchUser(c *gin.Context) {
 
 // DeleteUser deletes a user
 func (h *UserHandler) DeleteUser(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_ID",
-			"User ID is required",
-			"",
-		))
+	userID, ok := parseIDParam(c)
+	if !ok {
 		return
 	}
 
-	// Parse ID
-	userID, err := strconv.ParseUint(id, 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"INVALID_ID",
-			"Invalid user ID format",
-			"",
-		))
+	user, ok := h.fetchUserByID(c, userID)
+	if !ok {
 		return
 	}
 
-	var user models.User
-	if err := h.db.First(&user, userID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, dto.ErrorResponse(
-				"NOT_FOUND",
-				"User not found",
-				"",
-			))
-			return
-		}
-		log.Printf("failed to fetch user (id=%d): %v", userID, err)
+	if err := h.db.Delete(user).Error; err != nil {
+		logger.Error("failed to delete user (id=%d): %v", userID, err)
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to fetch user",
-			"An internal error occurred",
-		))
-		return
-	}
-
-	if err := h.db.Delete(&user).Error; err != nil {
-		log.Printf("failed to delete user (id=%d): %v", userID, err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR",
-			"Failed to delete user",
-			"An internal error occurred",
+			"DATABASE_ERROR", "Failed to delete user", "An internal error occurred",
 		))
 		return
 	}

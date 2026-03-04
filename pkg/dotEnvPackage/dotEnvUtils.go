@@ -5,9 +5,5 @@ import (
 )
 
 func LoadDotEnvFile(fileName string) error {
-	err := godotenv.Load(fileName)
-	if err != nil {
-		return err
-	}
-	return nil
+	return godotenv.Load(fileName)
 }

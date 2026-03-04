@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"gorm.io/gorm"
 	"io"
 	"log"
 	"mime/multipart"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"gorm.io/gorm"
 
 	"example.com/agent"
 	"example.com/internal/models"
@@ -367,6 +368,17 @@ func (h *ResumeHandlerHelper) GetResume(c *gin.Context) (models.Resume, error) {
 	}
 
 	return resumes[0], nil
+}
+
+func (h *ResumeHandlerHelper) IsResumeAvailable(id string) (bool, error) {
+	// Check if resume exists
+	var count int64
+	err := h.db.Model(&models.Resume{}).Where("resumes.user_name = ?", id).Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
 }
 
 func createQueryStringFromQueryParams(queryParam url.Values, tableName string) (string, []interface{}) {

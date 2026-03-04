@@ -2,8 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"flag"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,54 +11,92 @@ import (
 
 	"example.com/api/middleware"
 	"example.com/api/routes"
-	"example.com/pkg/cache"
 	internalConfig "example.com/internal/config"
 	"example.com/internal/database"
+	"example.com/pkg/cache"
+	"example.com/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load environment variables
-	if err := godotenv.Load(); err != nil {
-		log.Printf("Warning: Error loading .env file: %v", err)
+	// Parse command-line flags
+	devMode := flag.Bool("dev", false, "Run in development mode")
+	debugMode := flag.Bool("debug", false, "Enable debug logging with stack traces")
+	flag.Parse()
+
+	// Load environment variables from .env file
+	envFile := ".env"
+	if *devMode {
+		if _, err := os.Stat(".env.development"); err == nil {
+			envFile = ".env.development"
+		}
+	}
+
+	if err := godotenv.Load(envFile); err != nil {
+		// Use logger even before full init — Default() is always available
+		logger.Warn("failed to load %s: %v", envFile, err)
+	}
+
+	// If --dev flag is passed, set environment variables
+	if *devMode {
+		os.Setenv("CONFIG_MODE", "development")
+		os.Setenv("DEV", "true")
+	}
+
+	// Load application configuration
+	config, err := internalConfig.NewApplicationConfig()
+	if err != nil {
+		logger.Fatal("failed to load application config: %v", err)
+	}
+
+	if *devMode {
+		config.SetDevMode(true)
+	}
+	if *debugMode {
+		config.SetDebugMode(true)
+	}
+
+	// Initialize logger with config-based level and debug flag
+	logger.Initialize(config.GetLogLevel(), config.IsDebug())
+
+	if config.IsDev() {
+		logger.Info("running in development mode")
+	}
+	if config.IsDebug() {
+		logger.Info("debug mode enabled — stack traces will be included on errors")
 	}
 
 	// Initialize database
 	db, err := database.NewDatabase()
 	if err != nil {
-		log.Fatalf("Error connecting to database: %v", err)
+		logger.Fatal("failed to connect to database: %v", err)
 	}
 
-	// Ensure tables exist
 	if err := database.EnsureTablesExist(db); err != nil {
-		log.Fatalf("Error creating tables: %v", err)
+		logger.Fatal("failed to create tables: %v", err)
 	}
 
-	// Initialize Redis cache
+	// Initialize Redis cache (non-fatal if unavailable)
 	cacheConfig := cache.DefaultCacheConfig()
 	if err := cache.InitializeRedis(cacheConfig); err != nil {
-		log.Printf("Warning: Failed to connect to Redis: %v. Running without cache.", err)
+		logger.Warn("failed to connect to Redis: %v (running without cache)", err)
 	}
 
-	// Create router with custom configuration
+	// Create router
 	router := gin.New()
 
 	// Apply global middleware
-	router.Use(gin.Recovery())
+	router.Use(middleware.Recovery())
 	router.Use(middleware.Logger())
 	router.Use(middleware.RequestID())
 	router.Use(middleware.CORS())
 
-	// Health check endpoint
+	// Health check
 	router.GET("/health", middleware.HealthCheck())
 
-	// Setup application routes
-	config, cerr := internalConfig.NewApplicationConfig()
-	if cerr != nil {
-		log.Fatalf("Error loading application config: %v", cerr)
-	}
+	// Application routes
 	routes.SetupRoutes(router, db)
 
 	// Create HTTP server
@@ -73,36 +110,35 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("Starting server on port %s", config.GetPort())
+		logger.Info("starting server on port %s", config.GetPort())
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Error starting server: %v", err)
+			logger.Fatal("server failed to start: %v", err)
 		}
 	}()
 
-	// Wait for interrupt signal
+	// Wait for interrupt signal for graceful shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
+	logger.Info("shutting down server...")
 
-	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server forced to shutdown: %v", err)
+		logger.Fatal("server forced to shutdown: %v", err)
 	}
 
-	// Close DB connection (gorm.DB -> sql.DB)
-	if sqlDB, derr := db.DB(); derr == nil {
+	// Close DB connection
+	if sqlDB, err := db.DB(); err == nil {
 		if cerr := sqlDB.Close(); cerr != nil {
-			log.Printf("Error closing database connection: %v", cerr)
+			logger.Error("failed to close database connection: %v", cerr)
 		} else {
-			log.Println("Database connection closed")
+			logger.Info("database connection closed")
 		}
 	} else {
-		log.Printf("Unable to obtain underlying sql.DB to close: %v", derr)
+		logger.Error("unable to obtain underlying sql.DB to close: %v", err)
 	}
 
-	fmt.Println("Server exited properly")
+	logger.Info("server exited properly")
 }

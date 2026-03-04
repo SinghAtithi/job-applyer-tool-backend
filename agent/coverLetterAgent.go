@@ -3,37 +3,35 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
+
+	"example.com/pkg/logger"
 )
 
+// GetJobDescription extracts structured job description from raw text via AI
 func GetJobDescription(jobDescription string) (string, error) {
 	client := GetClientForResumeParserAgent()
-	log.Printf("Model used for parsing Job Description Info %v", client.config.Model)
+	if client == nil {
+		return "", fmt.Errorf("failed to initialize agent client")
+	}
+
+	logger.Info("extracting job description (model: %s)", client.config.Model)
 
 	req := &ChatRequest{
 		Messages: []Message{
-			{
-				Role:    "system",
-				Content: getJobDescriptionContentPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: jobDescription,
-			},
+			{Role: "system", Content: getJobDescriptionContentPrompt()},
+			{Role: "user", Content: jobDescription},
 		},
-		ResponseFormat: &ResponseFormat{
-			Type: "text",
-		},
+		ResponseFormat: &ResponseFormat{Type: "text"},
 	}
 
 	ctx := context.Background()
 	response, err := client.ChatCompletion(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("error parsing personal info: %v", err)
+		return "", fmt.Errorf("failed to extract job description: %w", err)
 	}
 
 	if len(response.Choices) == 0 {
-		return "", fmt.Errorf("no response received for personal info")
+		return "", fmt.Errorf("no response received for job description extraction")
 	}
 
 	contentStr, ok := response.Choices[0].Message.Content.(string)
@@ -43,34 +41,31 @@ func GetJobDescription(jobDescription string) (string, error) {
 	return contentStr, nil
 }
 
+// GetCoverLetterString generates a cover letter from job description and user details via AI
 func GetCoverLetterString(jobDescription string, userDetails string) (string, error) {
 	client := GetClientForResumeParserAgent()
-	log.Printf("Model used for parsing Cover Letter Info %v", client.config.Model)
+	if client == nil {
+		return "", fmt.Errorf("failed to initialize agent client")
+	}
+
+	logger.Info("generating cover letter (model: %s)", client.config.Model)
 
 	req := &ChatRequest{
 		Messages: []Message{
-			{
-				Role:    "system",
-				Content: getCoverLetterPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: jobDescription + "\n" + userDetails,
-			},
+			{Role: "system", Content: getCoverLetterPrompt()},
+			{Role: "user", Content: jobDescription + "\n" + userDetails},
 		},
-		ResponseFormat: &ResponseFormat{
-			Type: "text",
-		},
+		ResponseFormat: &ResponseFormat{Type: "text"},
 	}
 
 	ctx := context.Background()
 	response, err := client.ChatCompletion(ctx, req)
 	if err != nil {
-		return "", fmt.Errorf("error parsing personal info: %v", err)
+		return "", fmt.Errorf("failed to generate cover letter: %w", err)
 	}
 
 	if len(response.Choices) == 0 {
-		return "", fmt.Errorf("no response received for personal info")
+		return "", fmt.Errorf("no response received for cover letter generation")
 	}
 
 	contentStr, ok := response.Choices[0].Message.Content.(string)

@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
+
+	"example.com/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -31,7 +32,7 @@ func DefaultCacheConfig() *CacheConfig {
 		RedisAddr:     "localhost:6379",
 		RedisPassword: "",
 		RedisDB:       0,
-		DefaultTTL:    5 * time.Minute, // Default cache TTL of 5 minutes
+		DefaultTTL:    5 * time.Minute,
 	}
 }
 
@@ -43,17 +44,18 @@ func InitializeRedis(config *CacheConfig) error {
 		DB:       config.RedisDB,
 	})
 
-	// Test connection
 	_, err := redisClient.Ping(ctx).Result()
 	if err != nil {
+		// Reset client to nil so CacheMiddleware knows Redis is unavailable
+		redisClient = nil
 		return fmt.Errorf("failed to connect to Redis: %w", err)
 	}
 
-	log.Println("Connected to Redis successfully")
+	logger.Info("Connected to Redis successfully")
 	return nil
 }
 
-// GetRedisClient returns the Redis client
+// GetRedisClient returns the Redis client (may be nil if not initialized)
 func GetRedisClient() *redis.Client {
 	return redisClient
 }
@@ -63,7 +65,8 @@ func GenerateCacheKey(c *gin.Context) string {
 	return c.Request.URL.Path + "?" + c.Request.URL.RawQuery
 }
 
-// CacheMiddleware returns a middleware that caches GET responses
+// CacheMiddleware returns a middleware that caches GET responses.
+// If Redis is not available, requests pass through without caching.
 func CacheMiddleware(ttl time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Only cache GET requests
@@ -72,16 +75,19 @@ func CacheMiddleware(ttl time.Duration) gin.HandlerFunc {
 			return
 		}
 
-		// Generate cache key
+		// Guard: skip caching if Redis is not available
+		if redisClient == nil {
+			c.Next()
+			return
+		}
+
 		cacheKey := GenerateCacheKey(c)
 
 		// Try to get from cache
 		cachedData, err := redisClient.Get(ctx, cacheKey).Result()
 		if err == nil {
-			// Cache hit - return cached response
-			log.Printf("Cache HIT for key: %s", cacheKey)
+			logger.Debug("cache HIT for key: %s", cacheKey)
 
-			// Try to unmarshal as map first, then as array
 			var responseMap map[string]interface{}
 			var responseArray []interface{}
 
@@ -90,7 +96,7 @@ func CacheMiddleware(ttl time.Duration) gin.HandlerFunc {
 			} else if err := json.Unmarshal([]byte(cachedData), &responseArray); err == nil {
 				c.JSON(http.StatusOK, responseArray)
 			} else {
-				log.Printf("Error unmarshaling cached response: %v", err)
+				logger.Error("failed to unmarshal cached response for key %s: %v", cacheKey, err)
 				c.Next()
 				return
 			}
@@ -98,10 +104,9 @@ func CacheMiddleware(ttl time.Duration) gin.HandlerFunc {
 			return
 		}
 
-		// Cache miss - continue to handler and cache the response
-		log.Printf("Cache MISS for key: %s", cacheKey)
+		// Cache miss
+		logger.Debug("cache MISS for key: %s", cacheKey)
 
-		// Create a response writer wrapper to capture the response
 		writer := &ResponseWriter{
 			ResponseWriter: c.Writer,
 			body:           nil,
@@ -115,16 +120,15 @@ func CacheMiddleware(ttl time.Duration) gin.HandlerFunc {
 		if writer.statusCode >= http.StatusOK && writer.statusCode < http.StatusMultipleChoices {
 			bodyBytes, err := json.Marshal(writer.body)
 			if err != nil {
-				log.Printf("Error marshaling response for cache: %v", err)
+				logger.Error("failed to marshal response for cache: %v", err)
 				return
 			}
 
-			err = redisClient.Set(ctx, cacheKey, bodyBytes, ttl).Err()
-			if err != nil {
-				log.Printf("Error setting cache: %v", err)
+			if setErr := redisClient.Set(ctx, cacheKey, bodyBytes, ttl).Err(); setErr != nil {
+				logger.Error("failed to set cache for key %s: %v", cacheKey, setErr)
 				return
 			}
-			log.Printf("Cached response for key: %s with TTL: %v", cacheKey, ttl)
+			logger.Debug("cached response for key: %s (TTL: %v)", cacheKey, ttl)
 		}
 	}
 }
@@ -138,7 +142,6 @@ type ResponseWriter struct {
 
 // Write captures the response body
 func (rw *ResponseWriter) Write(body []byte) (int, error) {
-	// Try to unmarshal and store the body
 	var data interface{}
 	if err := json.Unmarshal(body, &data); err == nil {
 		rw.body = data
@@ -154,11 +157,17 @@ func (rw *ResponseWriter) WriteHeader(code int) {
 
 // InvalidateCache deletes a specific cache key
 func InvalidateCache(key string) error {
+	if redisClient == nil {
+		return nil
+	}
 	return redisClient.Del(ctx, key).Err()
 }
 
 // InvalidateCachePattern deletes all keys matching a pattern
 func InvalidateCachePattern(pattern string) error {
+	if redisClient == nil {
+		return nil
+	}
 	iter := redisClient.Scan(ctx, 0, pattern, 0).Iterator()
 	var keys []string
 	for iter.Next(ctx) {

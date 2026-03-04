@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"net/http"
-	"strconv"
+	"runtime"
 	"time"
+
+	"example.com/pkg/logger"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -27,7 +29,7 @@ func RequestID() gin.HandlerFunc {
 	}
 }
 
-// Logger middleware provides basic request logging
+// Logger middleware provides structured request logging
 func Logger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		startTime := time.Now()
@@ -35,36 +37,57 @@ func Logger() gin.HandlerFunc {
 		// Process request
 		c.Next()
 
-		// Log request details
+		// Log request details using the custom logger
 		latency := time.Since(startTime)
 		statusCode := c.Writer.Status()
+		requestID, _ := c.Get(RequestIDKey)
 
-		loggerMiddleware := gin.DefaultWriter
-		loggerMiddleware.Write([]byte(
-			time.Now().Format("2006-01-02 15:04:05") +
-				" | " + c.Request.Method +
-				" | " + c.Request.URL.Path +
-				" | " + c.ClientIP() +
-				" | " + strconv.Itoa(statusCode) +
-				" | " + latency.String() + "\n",
-		))
+		logger.Info("[req:%v] %s %s | %s | %d | %s",
+			requestID,
+			c.Request.Method,
+			c.Request.URL.Path,
+			c.ClientIP(),
+			statusCode,
+			latency,
+		)
 	}
 }
 
-// Recovery middleware recovers from panics
+// Recovery middleware recovers from panics and logs stack traces in debug mode
 func Recovery() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if err := recover(); err != nil {
-				// Log the recovered panic value for debugging
-				log.Printf("panic recovered: %v", err)
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+				// Always log the panic
+				logger.Error("panic recovered: %v", err)
+
+				// Capture stack trace
+				buf := make([]byte, 4096)
+				n := runtime.Stack(buf, false)
+				stackTrace := string(buf[:n])
+
+				// Always log the stack trace at error level
+				logger.Error("stack trace:\n%s", stackTrace)
+
+				response := gin.H{
 					"success": false,
 					"error": gin.H{
 						"code":    "INTERNAL_ERROR",
 						"message": "An unexpected error occurred",
 					},
-				})
+				}
+
+				// In debug mode, include stack trace in the response body
+				if logger.IsDebugMode() {
+					response["error"] = gin.H{
+						"code":        "INTERNAL_ERROR",
+						"message":     "An unexpected error occurred",
+						"debug_panic": fmt.Sprintf("%v", err),
+						"stack_trace": stackTrace,
+					}
+				}
+
+				c.AbortWithStatusJSON(http.StatusInternalServerError, response)
 			}
 		}()
 		c.Next()
@@ -105,14 +128,12 @@ func HealthCheck() gin.HandlerFunc {
 // Timeout middleware adds request timeout
 func Timeout(timeout time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// create a child context with timeout and attach it to the request
 		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
 		defer cancel()
 		c.Request = c.Request.WithContext(ctx)
 
 		c.Next()
 
-		// if deadline exceeded, respond with timeout
 		if ctx.Err() == context.DeadlineExceeded {
 			c.AbortWithStatusJSON(http.StatusRequestTimeout, gin.H{
 				"success": false,

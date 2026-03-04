@@ -10,6 +10,7 @@ type ResumeRepository interface {
 	Create(resume *models.Resume) error
 	Update(resume *models.Resume) error
 	Delete(id uint) error
+	IsResumeAvailable(id uint) (bool, error)
 }
 
 type resumeRepository struct {
@@ -39,4 +40,13 @@ func (r *resumeRepository) Update(resume *models.Resume) error {
 // Fixed: Added missing Delete method
 func (r *resumeRepository) Delete(id uint) error {
 	return r.db.Delete(&models.Resume{}, id).Error
+}
+
+func (r *resumeRepository) IsResumeAvailable(id uint) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.Resume{}).Where("id = ?", id).Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

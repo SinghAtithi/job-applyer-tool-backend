@@ -3,18 +3,22 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"time"
+
 	"example.com/internal/config"
 	"example.com/internal/models"
-	"fmt"
+	"example.com/pkg/logger"
+
 	"github.com/google/uuid"
-	"log"
-	"runtime/debug"
-	"time"
 )
 
 func GetPersonalInfoInJsonFormat(resumeDetails string) (*models.PersonalInfo, error) {
 	client := GetClientForResumeParserAgent()
-	log.Printf("Model used for parsing Personal Info %v", client.config.Model)
+	if client == nil {
+		return nil, fmt.Errorf("failed to initialize agent client")
+	}
+	logger.Info("parsing personal info (model: %s)", client.config.Model)
 
 	req := &ChatRequest{
 		Messages: []Message{
@@ -61,8 +65,10 @@ func GetPersonalInfoInJsonFormat(resumeDetails string) (*models.PersonalInfo, er
 
 func GetEducationInJsonFormat(resumeDetails string) ([]models.Education, error) {
 	client := GetClientForResumeParserAgent()
-
-	log.Printf("Model used for parsing Education %v", client.config.Model)
+	if client == nil {
+		return nil, fmt.Errorf("failed to initialize agent client")
+	}
+	logger.Info("parsing education (model: %s)", client.config.Model)
 
 	req := &ChatRequest{
 		Messages: []Message{
@@ -113,8 +119,10 @@ func GetEducationInJsonFormat(resumeDetails string) ([]models.Education, error) 
 
 func GetExperienceInJsonFormat(resumeDetails string) ([]models.Experience, error) {
 	client := GetClientForResumeParserAgent()
-
-	log.Printf("Model used for parsing Experience %v", client.config.Model)
+	if client == nil {
+		return nil, fmt.Errorf("failed to initialize agent client")
+	}
+	logger.Info("parsing experience (model: %s)", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -164,8 +172,10 @@ func GetExperienceInJsonFormat(resumeDetails string) ([]models.Experience, error
 
 func GetSkillsInJsonFormat(resumeDetails string) (*models.Skills, error) {
 	client := GetClientForResumeParserAgent()
-
-	log.Printf("Model used for parsing skills %v", client.config.Model)
+	if client == nil {
+		return nil, fmt.Errorf("failed to initialize agent client")
+	}
+	logger.Info("parsing skills (model: %s)", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -211,8 +221,10 @@ func GetSkillsInJsonFormat(resumeDetails string) (*models.Skills, error) {
 
 func GetProjectsInJsonFormat(resumeDetails string) ([]models.Project, error) {
 	client := GetClientForResumeParserAgent()
-
-	log.Printf("Model used for parsing projects %v", client.config.Model)
+	if client == nil {
+		return nil, fmt.Errorf("failed to initialize agent client")
+	}
+	logger.Info("parsing projects (model: %s)", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -262,8 +274,10 @@ func GetProjectsInJsonFormat(resumeDetails string) ([]models.Project, error) {
 
 func GetSummaryInJsonFormat(resumeDetails string) (string, error) {
 	client := GetClientForResumeParserAgent()
-
-	log.Printf("Model used for parsing summary %v", client.config.Model)
+	if client == nil {
+		return "", fmt.Errorf("failed to initialize agent client")
+	}
+	logger.Info("parsing summary (model: %s)", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -313,8 +327,10 @@ func GetSummaryInJsonFormat(resumeDetails string) (string, error) {
 
 func GetAdditionalInfoInJsonFormat(resumeDetails string) (*models.AdditionalInfo, error) {
 	client := GetClientForResumeParserAgent()
-
-	log.Printf("Model used for parsing additional info %v", client.config.Model)
+	if client == nil {
+		return nil, fmt.Errorf("failed to initialize agent client")
+	}
+	logger.Info("parsing additional info (model: %s)", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -360,8 +376,10 @@ func GetAdditionalInfoInJsonFormat(resumeDetails string) (*models.AdditionalInfo
 
 func GetHobbiesInJsonFormat(resumeDetails string) ([]string, error) {
 	client := GetClientForResumeParserAgent()
-
-	log.Printf("Model used for parsing hobbies %v", client.config.Model)
+	if client == nil {
+		return nil, fmt.Errorf("failed to initialize agent client")
+	}
+	logger.Info("parsing hobbies (model: %s)", client.config.Model)
 	req := &ChatRequest{
 		Messages: []Message{
 			{
@@ -519,14 +537,14 @@ func GetResumeDetailInJsonFormat(resumeDetails string) (*models.Resume, error) {
 	// Log errors but continue with partial data
 	if len(errors) > 0 {
 		for _, err := range errors {
-			log.Printf("Parsing error: %v", err)
+			logger.Warn("resume section parsing error: %v", err)
 		}
 	}
 
 	// Create the complete Resume object
 	newUUID, err := uuid.NewUUID()
 	if err != nil {
-		log.Printf("Error generating UUID: %v", err)
+		logger.Error("failed to generate UUID: %v", err)
 		newUUID = uuid.Nil
 	}
 	resume := &models.Resume{
@@ -570,65 +588,65 @@ func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUI
 
 	// Parse personal info
 	if personalInfo, err := GetPersonalInfoInJsonFormat(resumeDetails); err != nil {
-		log.Printf("Error parsing personal info: %v", err)
+		logger.Warn("failed to parse personal info: %v", err)
 	} else if personalInfo != nil {
-		log.Printf("personal info parsing sucessfull")
+		logger.Info("personal info parsed successfully")
 		resume.PersonalInfo = *personalInfo
 	}
 
 	// Parse education
 	if education, err := GetEducationInJsonFormat(resumeDetails); err != nil {
-		log.Printf("Error parsing education: %v", err)
+		logger.Warn("failed to parse education: %v", err)
 	} else {
-		log.Printf("education parsing sucessfull")
+		logger.Info("education parsed successfully")
 		resume.Education = education
 	}
 
 	// Parse experience
 	if experience, err := GetExperienceInJsonFormat(resumeDetails); err != nil {
-		log.Printf("Error parsing experience: %v", err)
+		logger.Warn("failed to parse experience: %v", err)
 	} else {
-		log.Printf("experience parsing sucessfull")
+		logger.Info("experience parsed successfully")
 		resume.Experience = experience
 	}
 
 	// Parse skills
 	if skills, err := GetSkillsInJsonFormat(resumeDetails); err != nil {
-		log.Printf("Error parsing skills: %v", err)
+		logger.Warn("failed to parse skills: %v", err)
 	} else {
-		log.Printf("skills parsing sucessfull")
+		logger.Info("skills parsed successfully")
 		resume.Skills = skills
 	}
 
 	// Parse projects
 	if projects, err := GetProjectsInJsonFormat(resumeDetails); err != nil {
-		log.Printf("Error parsing projects: %v", err)
+		logger.Warn("failed to parse projects: %v", err)
 	} else {
-		log.Printf("projects parsing sucessfull")
+		logger.Info("projects parsed successfully")
 		resume.Projects = projects
 	}
 
 	// Parse summary
 	if summary, err := GetSummaryInJsonFormat(resumeDetails); err != nil {
-		log.Printf("Error parsing summary: %v", err)
+		logger.Warn("failed to parse summary: %v", err)
 	} else {
-		log.Printf("summary parsing sucessfull")
+		logger.Info("summary parsed successfully")
 		resume.Summary = summary
 	}
 
 	// Parse additional info
 	if additionalInfo, err := GetAdditionalInfoInJsonFormat(resumeDetails); err != nil {
-		log.Printf("Error parsing additional info: %v", err)
+		logger.Warn("failed to parse additional info: %v", err)
 	} else {
-		log.Printf("additional info parsing sucessfull")
+		logger.Info("additional info parsed successfully")
 		resume.AdditionalInfo = additionalInfo
 	}
 
 	// Parse hobbies
 	if hobbies, err := GetHobbiesInJsonFormat(resumeDetails); err != nil {
-		log.Printf("Error parsing hobbies: %v", err)
+		logger.Warn("failed to parse hobbies: %v", err)
 	} else {
-		log.Printf("hobbies parsing sucessfull")
+		logger.Info("hobbies parsed successfully")
 		resume.Hobbies = hobbies
 	}
 
@@ -867,31 +885,30 @@ Hobbies Schema:
 
 Extract hobbies and interests and return ONLY the JSON object.`
 }
+
+// GetClientForResumeParserAgent loads configuration and returns a ready-to-use agent client.
+// Returns nil if configuration loading fails.
 func GetClientForResumeParserAgent() *ConfigAgentClient {
 	cfg, err := config.LoadAgentClient()
-
 	if err != nil {
-		log.Printf("Failed to load agent client configuration: %s\nStackTrace:\n%s", err.Error(), debug.Stack())
+		logger.Error("failed to load agent client configuration: %v", err)
 		return nil
 	}
-
-	client := NewAgentClient(cfg)
-	return client
+	return NewAgentClient(cfg)
 }
 
+// ResumeFixJsonFormat attempts to fix malformed JSON via AI
 func ResumeFixJsonFormat(resumeDetails string, errorDetails string) string {
 	client := GetClientForResumeParserAgent()
+	if client == nil {
+		logger.Error("cannot fix JSON format: agent client is nil")
+		return ""
+	}
 
-	req := &ChatRequest{ // Use pointer to ChatRequest
+	req := &ChatRequest{
 		Messages: []Message{
-			{
-				Role:    "system",
-				Content: models.GetResumeJsonFormatFix(),
-			},
-			{
-				Role:    "user",
-				Content: resumeDetails + "\n" + errorDetails,
-			},
+			{Role: "system", Content: models.GetResumeJsonFormatFix()},
+			{Role: "user", Content: resumeDetails + "\n" + errorDetails},
 		},
 		ResponseFormat: &ResponseFormat{
 			Type: "json_object",
@@ -900,18 +917,19 @@ func ResumeFixJsonFormat(resumeDetails string, errorDetails string) string {
 			},
 		},
 	}
+
 	ctx := context.Background()
 	response, err := client.ChatCompletion(ctx, req)
 	if err != nil {
-		log.Fatalf("Error: %v", err)
-	}
-
-	// Print response
-	if len(response.Choices) > 0 {
-		fmt.Printf("AI Response: %v\n", response.Choices[0].Message.Content)
-		return fmt.Sprintf("%v", response.Choices[0].Message.Content)
-	} else {
-		fmt.Println("No response received")
+		logger.Error("failed to fix JSON format via AI: %v", err)
 		return ""
 	}
+
+	if len(response.Choices) > 0 {
+		logger.Debug("AI JSON fix response received")
+		return fmt.Sprintf("%v", response.Choices[0].Message.Content)
+	}
+
+	logger.Warn("no response received for JSON format fix")
+	return ""
 }

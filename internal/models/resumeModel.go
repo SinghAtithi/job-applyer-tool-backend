@@ -27,8 +27,9 @@ package models
 import (
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // Resume represents a user's resume, including metadata and comprehensive resume data.

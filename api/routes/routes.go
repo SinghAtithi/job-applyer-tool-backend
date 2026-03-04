@@ -12,10 +12,10 @@ import (
 // Default cache TTL of 25 minutes
 const cacheTTL = 25 * time.Minute
 
+// SetupRoutes registers all application routes on the given router
 func SetupRoutes(router *gin.Engine, db *gorm.DB) {
-
-	userHandler := handler.NewUserHandler(db)
 	// User routes
+	userHandler := handler.NewUserHandler(db)
 	userRoutes := router.Group("/users")
 	{
 		userRoutes.GET("/", cache.CacheMiddleware(cacheTTL), userHandler.GetAllUsers)
@@ -26,8 +26,8 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB) {
 		userRoutes.DELETE("/:id", userHandler.DeleteUser)
 	}
 
-	resumeHandler := handler.NewResumeHandler(db)
 	// Resume routes
+	resumeHandler := handler.NewResumeHandler(db)
 	resumeRoutes := router.Group("/resumes")
 	{
 		resumeRoutes.GET("/", cache.CacheMiddleware(cacheTTL), resumeHandler.GetAllResumes)
@@ -36,10 +36,11 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB) {
 		resumeRoutes.PUT("/:id", resumeHandler.UpdateResume)
 		resumeRoutes.PATCH("/:id", resumeHandler.PatchResume)
 		resumeRoutes.DELETE("/:id", resumeHandler.DeleteResume)
+		resumeRoutes.GET("/isResumeAvailable/:id", resumeHandler.IsResumeAvailable)
 	}
 
-	coverLetterHandler := handler.NewCoverLetter(db)
-
+	// Cover letter routes
+	coverLetterHandler := handler.NewCoverLetterHandler(db)
 	coverLetterRoutes := router.Group("/coverLetter")
 	{
 		coverLetterRoutes.GET("/", cache.CacheMiddleware(cacheTTL), coverLetterHandler.GetAllCoverLetters)
@@ -49,5 +50,4 @@ func SetupRoutes(router *gin.Engine, db *gorm.DB) {
 		coverLetterRoutes.PATCH("/:id", coverLetterHandler.PatchCoverLetter)
 		coverLetterRoutes.DELETE("/:id", coverLetterHandler.DeleteCoverLetter)
 	}
-
 }

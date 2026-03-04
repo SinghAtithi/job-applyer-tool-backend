@@ -10,48 +10,58 @@ import (
 	"time"
 
 	"example.com/internal/config"
+	"example.com/pkg/logger"
 )
 
+// ConfigAgentClient wraps the AI API client with configuration
 type ConfigAgentClient struct {
 	config     *config.AgentClient
 	httpClient *http.Client
 }
 
+// ChatRequest represents a chat completion request
 type ChatRequest struct {
 	Model          string          `json:"model"`
 	Messages       []Message       `json:"messages"`
 	ResponseFormat *ResponseFormat `json:"response_format,omitempty"`
 }
 
+// Message represents a single message in the conversation
 type Message struct {
 	Role    string      `json:"role"`
 	Content interface{} `json:"content"`
 }
 
+// ResponseFormat specifies the expected response format
 type ResponseFormat struct {
 	Type   string                 `json:"type"`
 	Schema map[string]interface{} `json:"schema,omitempty"`
 }
 
+// ChatResponse represents the API response
 type ChatResponse struct {
 	Choices []Choice  `json:"choices"`
 	Error   *APIError `json:"error,omitempty"`
 }
 
+// Choice represents a single choice in the response
 type Choice struct {
 	Message MessageContent `json:"message"`
 }
 
+// MessageContent holds the response content
 type MessageContent struct {
 	Content interface{} `json:"content"`
 }
 
+// APIError represents an error returned by the API
 type APIError struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Code    string `json:"code"`
 }
 
+// NewAgentClient creates a new AI agent client
 func NewAgentClient(cfg *config.AgentClient) *ConfigAgentClient {
 	return &ConfigAgentClient{
 		config: cfg,
@@ -61,8 +71,8 @@ func NewAgentClient(cfg *config.AgentClient) *ConfigAgentClient {
 	}
 }
 
+// ChatCompletion sends a chat completion request and returns the response
 func (c *ConfigAgentClient) ChatCompletion(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
-	// Set default model if not provided
 	if req.Model == "" {
 		req.Model = c.config.Model
 	}
@@ -79,8 +89,9 @@ func (c *ConfigAgentClient) ChatCompletion(ctx context.Context, req *ChatRequest
 
 	c.setHeaders(httpReq)
 
+	logger.Debug("sending chat completion request to %s (model: %s)", c.config.BaseURL, req.Model)
+
 	resp, err := c.httpClient.Do(httpReq)
-	//logHTTPDetails(httpReq, resp) // Log request details
 	if err != nil {
 		return nil, fmt.Errorf("failed to make HTTP request: %w", err)
 	}
@@ -110,32 +121,32 @@ func (c *ConfigAgentClient) setHeaders(req *http.Request) {
 	req.Header.Set("Authorization", "Bearer "+c.config.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Title", "Job-Applyer-Tool")
-	req.Header.Set("HTTP-Referer", "")
 }
 
+// logHTTPDetails logs full HTTP request/response details (only in debug mode)
 func logHTTPDetails(req *http.Request, resp *http.Response) {
-	fmt.Printf("=== HTTP REQUEST ===\n")
-	fmt.Printf("Method: %s\n", req.Method)
-	fmt.Printf("URL: %s\n", req.URL.String())
-	fmt.Printf("Headers:\n")
+	logger.Debug("=== HTTP REQUEST ===")
+	logger.Debug("Method: %s", req.Method)
+	logger.Debug("URL: %s", req.URL.String())
+
 	for k, v := range req.Header {
-		fmt.Printf("  %s: %s\n", k, v)
+		logger.Debug("  Header %s: %v", k, v)
 	}
 
 	if req.Body != nil {
 		body, _ := io.ReadAll(req.Body)
 		req.Body = io.NopCloser(bytes.NewReader(body))
-		fmt.Printf("Body: %s\n", body)
+		logger.Debug("Body: %s", body)
 	}
 
-	fmt.Printf("\n=== HTTP RESPONSE ===\n")
-	fmt.Printf("Status: %s\n", resp.Status)
-	fmt.Printf("Headers:\n")
+	logger.Debug("=== HTTP RESPONSE ===")
+	logger.Debug("Status: %s", resp.Status)
+
 	for k, v := range resp.Header {
-		fmt.Printf("  %s: %s\n", k, v)
+		logger.Debug("  Header %s: %v", k, v)
 	}
 
 	body, _ := io.ReadAll(resp.Body)
 	resp.Body = io.NopCloser(bytes.NewReader(body))
-	fmt.Printf("Body: %s\n", body)
+	logger.Debug("Body: %s", body)
 }

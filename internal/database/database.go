@@ -2,11 +2,11 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 
 	"example.com/internal/models"
+	"example.com/pkg/logger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -29,8 +29,7 @@ func getDBConnectionDetails() DatabaseConfig {
 		Username: getEnv("DB_USERNAME", "postgres"),
 		Password: getEnv("DB_PASSWORD", ""),
 		DBName:   getEnv("DB_NAME", "resumedb"),
-		// Default to a secure SSL mode; change to 'disable' only if explicitly configured
-		SSLMode: getEnv("DB_SSL_MODE", "require"),
+		SSLMode:  getEnv("DB_SSL_MODE", "require"),
 	}
 }
 
@@ -46,12 +45,11 @@ func getEnv(key, defaultValue string) string {
 func NewDatabase() (*gorm.DB, error) {
 	dbConfig := getDBConnectionDetails()
 
-	// warn when SSL is explicitly disabled so it's auditable
 	if dbConfig.SSLMode == "disable" {
-		log.Println("Warning: DB SSL Mode is 'disable' — TLS is disabled for DB connections. Ensure this is intentional and auditable.")
+		logger.Warn("DB SSL mode is 'disable' — TLS is disabled for DB connections. Ensure this is intentional.")
 	}
 
-	// Build a URL-style DSN and ensure credentials are properly escaped
+	// Build a URL-style DSN with properly escaped credentials
 	userinfo := url.UserPassword(dbConfig.Username, dbConfig.Password)
 	u := &url.URL{
 		Scheme: "postgres",
@@ -69,7 +67,7 @@ func NewDatabase() (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	log.Println("Database connection established successfully")
+	logger.Info("Database connection established successfully")
 	return db, nil
 }
 
@@ -80,11 +78,10 @@ func EnsureTablesExist(db *gorm.DB) error {
 		&models.CoverLetterTable{},
 		&models.JobDescriptionTable{},
 	)
-
 	if err != nil {
 		return fmt.Errorf("failed to auto migrate tables: %w", err)
 	}
 
-	log.Println("All tables ensured to exist")
+	logger.Info("All tables ensured to exist")
 	return nil
 }
