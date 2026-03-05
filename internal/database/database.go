@@ -43,23 +43,39 @@ func getEnv(key, defaultValue string) string {
 
 // NewDatabase creates a new database connection
 func NewDatabase() (*gorm.DB, error) {
+
+	// 1. Prefer full connection string (cloud platforms)
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+
+		db, err := gorm.Open(postgres.Open(dbURL), &gorm.Config{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect using DATABASE_URL: %w", err)
+		}
+
+		logger.Info("Database connection established using DATABASE_URL")
+		return db, nil
+	}
+
+	// 2. Fallback to manual config (local dev)
 	dbConfig := getDBConnectionDetails()
 
 	if dbConfig.SSLMode == "disable" {
 		logger.Warn("DB SSL mode is 'disable' — TLS is disabled for DB connections. Ensure this is intentional.")
 	}
 
-	// Build a URL-style DSN with properly escaped credentials
 	userinfo := url.UserPassword(dbConfig.Username, dbConfig.Password)
+
 	u := &url.URL{
 		Scheme: "postgres",
 		User:   userinfo,
 		Host:   fmt.Sprintf("%s:%s", dbConfig.Host, dbConfig.Port),
 		Path:   "/" + dbConfig.DBName,
 	}
+
 	q := u.Query()
 	q.Set("sslmode", dbConfig.SSLMode)
 	u.RawQuery = q.Encode()
+
 	dsn := u.String()
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -67,7 +83,7 @@ func NewDatabase() (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
-	logger.Info("Database connection established successfully")
+	logger.Info("Database connection established using DB_* environment variables")
 	return db, nil
 }
 

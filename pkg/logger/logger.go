@@ -266,6 +266,7 @@ func Error(format string, args ...interface{}) {
 
 func Fatal(format string, args ...interface{}) {
 	Default().logWithSkip(FatalLevel, 3, format, args...)
+	os.Exit(1)
 }
 
 // IsDebugMode returns whether the global logger is in debug mode
