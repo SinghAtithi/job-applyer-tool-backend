@@ -1,7 +1,7 @@
 port: 8080
 environment: development
 logging:
-  level: info
+  level: debug
 agent:
   base_url: https://api.groq.com/openai/v1/chat/completions
-  model: meta-llama/llama-prompt-guard-2-86m
+  model: deepseek-r1-distill-llama-70b
