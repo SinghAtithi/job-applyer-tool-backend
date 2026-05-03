@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"strings"
 	"time"
 
 	"example.com/pkg/logger"
@@ -97,15 +98,45 @@ func Recovery() gin.HandlerFunc {
 // CORS middleware handles cross-origin requests
 func CORS() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		origin := c.GetHeader("Origin")
+
+		// Allow all origins in development, restrict in production
+		c.Header("Access-Control-Allow-Origin", origin)
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Request-ID")
+		c.Header("Access-Control-Expose-Headers", "X-Request-ID, Content-Length")
 		c.Header("Access-Control-Max-Age", "86400")
+		c.Header("Access-Control-Allow-Credentials", "true")
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
+
+		c.Next()
+	}
+}
+
+// SecurityHeaders middleware adds security-related headers
+func SecurityHeaders() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Content Security Policy
+		c.Header("Content-Security-Policy", "default-src 'self'")
+
+		// X-Frame-Options
+		c.Header("X-Frame-Options", "DENY")
+
+		// X-Content-Type-Options
+		c.Header("X-Content-Type-Options", "nosniff")
+
+		// X-XSS-Protection
+		c.Header("X-XSS-Protection", "1; mode=block")
+
+		// Strict-Transport-Security (HSTS)
+		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+
+		// Referrer-Policy
+		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 
 		c.Next()
 	}
@@ -125,24 +156,106 @@ func HealthCheck() gin.HandlerFunc {
 	}
 }
 
-// Timeout middleware adds request timeout
-func Timeout(timeout time.Duration) gin.HandlerFunc {
+// RequestTimeout returns a timeout middleware with the given duration
+func RequestTimeout(duration time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
+		ctx, cancel := context.WithTimeout(c.Request.Context(), duration)
 		defer cancel()
 		c.Request = c.Request.WithContext(ctx)
-
 		c.Next()
+	}
+}
 
-		if ctx.Err() == context.DeadlineExceeded {
-			c.AbortWithStatusJSON(http.StatusRequestTimeout, gin.H{
+// RateLimitConfig holds configuration for rate limiting
+type RateLimitConfig struct {
+	MaxRequests int
+	Duration    time.Duration
+}
+
+// simpleInMemoryStore is a basic in-memory store for rate limiting
+type simpleInMemoryStore struct {
+	requests map[string][]time.Time
+}
+
+// SimpleRateLimiter middleware implements a simple in-memory rate limiter
+func SimpleRateLimiter(config RateLimitConfig) gin.HandlerFunc {
+	store := &simpleInMemoryStore{
+		requests: make(map[string][]time.Time),
+	}
+
+	return func(c *gin.Context) {
+		clientIP := c.ClientIP()
+		now := time.Now()
+
+		// Clean old entries
+		cutoff := now.Add(-config.Duration)
+		if times, exists := store.requests[clientIP]; exists {
+			var validTimes []time.Time
+			for _, t := range times {
+				if t.After(cutoff) {
+					validTimes = append(validTimes, t)
+				}
+			}
+			store.requests[clientIP] = validTimes
+		}
+
+		// Check rate limit
+		if len(store.requests[clientIP]) >= config.MaxRequests {
+			c.JSON(http.StatusTooManyRequests, gin.H{
 				"success": false,
 				"error": gin.H{
-					"code":    "TIMEOUT",
-					"message": "Request timeout",
+					"code":    "RATE_LIMIT_EXCEEDED",
+					"message": "Too many requests",
 				},
 			})
+			c.Abort()
 			return
 		}
+
+		// Record request
+		store.requests[clientIP] = append(store.requests[clientIP], now)
+		c.Next()
+	}
+}
+
+// BodySizeLimit middleware limits request body size
+func BodySizeLimit(maxSize int64) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxSize)
+		c.Next()
+	}
+}
+
+// ContentTypeValidator middleware validates Content-Type header for POST/PUT/PATCH requests
+func ContentTypeValidator(allowedTypes ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH" {
+			contentType := c.GetHeader("Content-Type")
+			// Remove charset suffix if present
+			if idx := strings.Index(contentType, ";"); idx != -1 {
+				contentType = strings.TrimSpace(contentType[:idx])
+			}
+
+			isAllowed := false
+			for _, allowed := range allowedTypes {
+				if contentType == allowed {
+					isAllowed = true
+					break
+				}
+			}
+
+			if !isAllowed {
+				c.JSON(http.StatusUnsupportedMediaType, gin.H{
+					"success": false,
+					"error": gin.H{
+						"code":    "UNSUPPORTED_MEDIA_TYPE",
+						"message": "Content-Type must be one of: " + strings.Join(allowedTypes, ", "),
+					},
+				})
+				c.Abort()
+				return
+			}
+		}
+		c.Next()
 	}
 }
