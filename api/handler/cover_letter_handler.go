@@ -43,7 +43,7 @@ func (h *CoverLetterHandler) CreateCoverLetter(c *gin.Context) {
 	if isPresent {
 		jobDescriptionContent = jobDescriptionData.ContentInfo
 	} else {
-		jobDescriptionContent, err = agent.GetJobDescription(requestBody.TextContent)
+		jobDescriptionContent, err = agent.GetJobDescription(c.Request.Context(), requestBody.TextContent)
 		if err != nil {
 			logger.Error("failed to get job description from agent: %v", err)
 			c.JSON(http.StatusBadRequest, dto.ErrorResponse(
@@ -57,7 +57,7 @@ func (h *CoverLetterHandler) CreateCoverLetter(c *gin.Context) {
 		}
 	}
 
-	coverLetter, err := coverLetterHelper.GetCoverLetter(jobDescriptionContent, requestBody.UserName, requestBody.URL)
+	coverLetter, err := coverLetterHelper.GetCoverLetter(c.Request.Context(), jobDescriptionContent, requestBody.UserName, requestBody.URL)
 	if err != nil || coverLetter.ContentInfo == "" {
 		logger.Error("failed to generate cover letter: %v", err)
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
