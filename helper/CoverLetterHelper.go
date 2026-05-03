@@ -2,6 +2,7 @@ package helper
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -65,8 +66,7 @@ func (cl *CoverLetterHelper) GetUserDetails(userName string) (models.Resume, err
 }
 
 // GetCoverLetter retrieves an existing cover letter or generates a new one
-func (cl *CoverLetterHelper) GetCoverLetter(jobDescription string, userName string, url string) (models.CoverLetterTable, error) {
-	// Check for existing cover letter
+func (cl *CoverLetterHelper) GetCoverLetter(ctx context.Context, jobDescription string, userName string, url string) (models.CoverLetterTable, error) {
 	var coverLetterData models.CoverLetterTable
 	result := cl.db.Model(&models.CoverLetterTable{}).
 		Where("url = ?", url).
@@ -78,25 +78,21 @@ func (cl *CoverLetterHelper) GetCoverLetter(jobDescription string, userName stri
 		return coverLetterData, nil
 	}
 
-	// Fetch user details
 	userDetails, err := cl.GetUserDetails(userName)
 	if err != nil {
 		return models.CoverLetterTable{}, fmt.Errorf("user not found: %w", err)
 	}
 
-	// Serialize user details for the AI agent
 	userDetailsJSON, err := json.Marshal(userDetails)
 	if err != nil {
 		return models.CoverLetterTable{}, fmt.Errorf("failed to marshal user details: %w", err)
 	}
 
-	// Generate cover letter via AI
-	coverLetterContent, err := agent.GetCoverLetterString(jobDescription, string(userDetailsJSON))
+	coverLetterContent, err := agent.GetCoverLetterString(ctx, jobDescription, string(userDetailsJSON))
 	if err != nil {
 		return models.CoverLetterTable{}, fmt.Errorf("failed to generate cover letter: %w", err)
 	}
 
-	// Persist the generated cover letter
 	coverLetterData = cl.CommitCoverLetter(models.CoverLetterTable{
 		URL:         url,
 		ContentInfo: coverLetterContent,

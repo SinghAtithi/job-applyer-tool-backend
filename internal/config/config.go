@@ -1,10 +1,12 @@
 package config
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"os"
+	"sync"
 
 	publicPackage "example.com/pkg/dotEnvPackage"
 	"gopkg.in/yaml.v3"
@@ -115,39 +117,61 @@ func (c *ApplicationConfig) SetDebugMode(debug bool) {
 	c.debugMode = debug
 }
 
+var (
+	agentClientOnce sync.Once
+	agentClient     *AgentClient
+	agentClientErr  error
+)
+
+func selectModel() string {
+	models := GetAllAIModelNames()
+	if len(models) == 0 {
+		return "gpt-default"
+	}
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(models))))
+	if err != nil {
+		return models[0]
+	}
+	return models[n.Int64()]
+}
+
 // LoadAgentClient loads Groq configuration securely.
 // Environment variables take precedence for secrets like API keys.
+// The model is selected once at first call and cached; subsequent calls return the same config.
 func LoadAgentClient() (*AgentClient, error) {
-	models := GetAllAIModelNames()
-	modelName := ""
-	if len(models) > 0 {
-		modelName = models[rand.Intn(len(models))]
-	} else {
-		modelName = "gpt-default"
-	}
+	agentClientOnce.Do(func() {
+		modelName := selectModel()
 
-	cfg := struct {
-		BaseURL string `yaml:"agent_base_url"`
-		Model   string `yaml:"agent_model"`
-	}{
-		BaseURL: "https://api.groq.com/openai/v1/chat/completions",
-		Model:   modelName,
-	}
-
-	if err := readYamlFile(getConfigPath(), &cfg); err != nil {
-		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to read agent config: %w", err)
+		cfg := struct {
+			BaseURL string `yaml:"agent_base_url"`
+			Model   string `yaml:"agent_model"`
+		}{
+			BaseURL: "https://api.groq.com/openai/v1/chat/completions",
+			Model:   modelName,
 		}
-	}
 
-	apiKey := os.Getenv("GROQ_API_KEY")
-	if apiKey == "" {
-		return nil, errors.New("GROQ_API_KEY not set in environment")
-	}
+		if err := readYamlFile(getConfigPath(), &cfg); err != nil {
+			if !os.IsNotExist(err) {
+				agentClientErr = fmt.Errorf("failed to read agent config: %w", err)
+				return
+			}
+		}
 
-	return &AgentClient{
-		APIKey:  apiKey,
-		BaseURL: cfg.BaseURL,
-		Model:   cfg.Model,
-	}, nil
+		apiKey := os.Getenv("GROQ_API_KEY")
+		if apiKey == "" {
+			agentClientErr = errors.New("GROQ_API_KEY not set in environment")
+			return
+		}
+
+		agentClient = &AgentClient{
+			APIKey:  apiKey,
+			BaseURL: cfg.BaseURL,
+			Model:   cfg.Model,
+		}
+	})
+
+	if agentClientErr != nil {
+		return nil, agentClientErr
+	}
+	return agentClient, nil
 }

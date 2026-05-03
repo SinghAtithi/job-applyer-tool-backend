@@ -2,6 +2,7 @@ package helper
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"example.com/agent"
 	"example.com/internal/models"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	_ "github.com/jackc/pgx"
 	"github.com/ledongthuc/pdf"
 	_ "github.com/lib/pq"
@@ -169,12 +171,12 @@ func (rp *ResumeParser) ParseFromUpload(c *gin.Context) (models.Resume, error) {
 		return models.Resume{}, err
 	}
 
-	return rp.parseTextToResume(textContent)
+	return rp.parseTextToResume(c.Request.Context(), textContent)
 }
 
-// parseTextToResume converts extracted text to a Resume struct
-func (rp *ResumeParser) parseTextToResume(textContent string) (models.Resume, error) {
-	resumeDetails, err := agent.GetResumeDetailInJsonFormat(textContent)
+func (rp *ResumeParser) parseTextToResume(ctx context.Context, textContent string) (models.Resume, error) {
+	userID := uuid.New()
+	resumeDetails, err := agent.GetResumeDetailInJsonFormat(ctx, textContent, userID, "", "", "pdf")
 	if err != nil {
 		return models.Resume{}, fmt.Errorf("failed to parse resume details: %w", err)
 	}
@@ -270,10 +272,13 @@ func (h *ResumeHandlerHelper) HandleParseResume(ctx *gin.Context) (models.Resume
 		return models.Resume{}, fmt.Errorf("failed to parse resume: %w", err)
 	}
 
-	resumeDetails, parseErr := agent.GetResumeDetailInJsonFormat(resumeString)
+	reqCtx := ctx.Request.Context()
+	userID := uuid.New()
+
+	resumeDetails, parseErr := agent.GetResumeDetailInJsonFormat(reqCtx, resumeString, userID, "", "", "pdf")
 	resumeInJsonFormat := ""
 	if parseErr != nil {
-		resumeInJsonFormat = agent.ResumeFixJsonFormat(resumeString, parseErr.Error())
+		resumeInJsonFormat, _ = agent.ResumeFixJsonFormat(reqCtx, resumeString, parseErr.Error())
 	} else if resumeDetails != nil {
 		resumeInJsonFormatBytes, err := json.Marshal(resumeDetails)
 		if err != nil {
@@ -288,7 +293,7 @@ func (h *ResumeHandlerHelper) HandleParseResume(ctx *gin.Context) (models.Resume
 		attempts := 0
 		maxAttempts := MaxRetryAttempts
 		for attempts < maxAttempts {
-			resumeInJsonFormat = agent.ResumeFixJsonFormat(resumeString, err.Error())
+			resumeInJsonFormat, _ = agent.ResumeFixJsonFormat(reqCtx, resumeString, err.Error())
 			attempts++
 			err = resumeParser.validateJSONSyntax(resumeInJsonFormat)
 			if err == nil {
@@ -303,7 +308,7 @@ func (h *ResumeHandlerHelper) HandleParseResume(ctx *gin.Context) (models.Resume
 		attempts := 0
 		maxAttempts := MaxRetryAttempts
 		for attempts < maxAttempts {
-			resumeInJsonFormat = agent.ResumeFixJsonFormat(resumeString, err.Error())
+			resumeInJsonFormat, _ = agent.ResumeFixJsonFormat(reqCtx, resumeString, err.Error())
 			attempts++
 			resumeDetailsObj, err = GetResumeSchemaFromJsonTyped(resumeInJsonFormat)
 			if err == nil {
@@ -323,7 +328,7 @@ func (h *ResumeHandlerHelper) CommitResumeToDB(data models.Resume) (*models.Resu
 	}
 	result := h.db.Create(&data)
 	if result.Error != nil {
-		log.Printf("ERRRRRRRRRRRROOORRRR" + result.Error.Error())
+		log.Printf("ERRRRRRRRRRRROOORRRR%s", result.Error.Error())
 		return nil, result.Error
 	}
 	return &data, nil

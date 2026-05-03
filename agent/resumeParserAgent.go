@@ -6,489 +6,133 @@ import (
 	"fmt"
 	"time"
 
-	"example.com/internal/config"
 	"example.com/internal/models"
 	"example.com/pkg/logger"
 
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 )
 
-func GetPersonalInfoInJsonFormat(resumeDetails string) (*models.PersonalInfo, error) {
-	client := GetClientForResumeParserAgent()
-	if client == nil {
-		return nil, fmt.Errorf("failed to initialize agent client")
+func parseSection[T any](ctx context.Context, systemPrompt, userInput string, schema map[string]interface{}) (T, error) {
+	var zero T
+	client, err := GetSharedClient()
+	if err != nil {
+		return zero, fmt.Errorf("failed to get agent client: %w", err)
 	}
-	logger.Info("parsing personal info (model: %s)", client.config.Model)
+
+	logger.Info("parsing section (model: %s)", client.config.Model)
 
 	req := &ChatRequest{
 		Messages: []Message{
-			{
-				Role:    "system",
-				Content: GetPersonalInfoSystemPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: resumeDetails,
-			},
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userInput},
 		},
 		ResponseFormat: &ResponseFormat{
-			Type: "json_object",
-			Schema: map[string]interface{}{
-				"schema": models.PersonalInfo{},
-			},
+			Type:   "json_object",
+			Schema: schema,
 		},
 	}
 
-	ctx := context.Background()
 	response, err := client.ChatCompletion(ctx, req)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing personal info: %v", err)
+		return zero, fmt.Errorf("LLM request failed: %w", err)
 	}
 
 	if len(response.Choices) == 0 {
-		return nil, fmt.Errorf("no response received for personal info")
+		return zero, fmt.Errorf("no response received")
 	}
 
 	contentStr, ok := response.Choices[0].Message.Content.(string)
 	if !ok {
-		return nil, fmt.Errorf("response content is not a string")
+		return zero, fmt.Errorf("response content is not a string")
 	}
 
-	var personalInfo models.PersonalInfo
-	err = json.Unmarshal([]byte(contentStr), &personalInfo)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling personal info: %v", err)
+	var result T
+	if err := json.Unmarshal([]byte(contentStr), &result); err != nil {
+		return zero, fmt.Errorf("JSON unmarshal failed: %w", err)
 	}
 
-	return &personalInfo, nil
+	return result, nil
 }
 
-func GetEducationInJsonFormat(resumeDetails string) ([]models.Education, error) {
-	client := GetClientForResumeParserAgent()
-	if client == nil {
-		return nil, fmt.Errorf("failed to initialize agent client")
-	}
-	logger.Info("parsing education (model: %s)", client.config.Model)
+func GetPersonalInfoInJsonFormat(ctx context.Context, resumeDetails string) (*models.PersonalInfo, error) {
+	return parseSection[*models.PersonalInfo](ctx, GetPersonalInfoSystemPrompt(), resumeDetails,
+		map[string]interface{}{"schema": models.PersonalInfo{}})
+}
 
-	req := &ChatRequest{
-		Messages: []Message{
-			{
-				Role:    "system",
-				Content: GetEducationSystemPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: resumeDetails,
-			},
-		},
-		ResponseFormat: &ResponseFormat{
-			Type: "json_object",
-			Schema: map[string]interface{}{
-				"schema": struct {
-					Education []models.Education `json:"education"`
-				}{},
-			},
-		},
-	}
-
-	ctx := context.Background()
-	response, err := client.ChatCompletion(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing education: %v", err)
-	}
-
-	if len(response.Choices) == 0 {
-		return nil, fmt.Errorf("no response received for education")
-	}
-
-	contentStr, ok := response.Choices[0].Message.Content.(string)
-	if !ok {
-		return nil, fmt.Errorf("response content is not a string")
-	}
-
-	var result struct {
+func GetEducationInJsonFormat(ctx context.Context, resumeDetails string) ([]models.Education, error) {
+	type wrapper struct {
 		Education []models.Education `json:"education"`
 	}
-	err = json.Unmarshal([]byte(contentStr), &result)
+	result, err := parseSection[wrapper](ctx, GetEducationSystemPrompt(), resumeDetails,
+		map[string]interface{}{"schema": wrapper{}})
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling education: %v", err)
+		return nil, err
 	}
-
 	return result.Education, nil
 }
 
-func GetExperienceInJsonFormat(resumeDetails string) ([]models.Experience, error) {
-	client := GetClientForResumeParserAgent()
-	if client == nil {
-		return nil, fmt.Errorf("failed to initialize agent client")
-	}
-	logger.Info("parsing experience (model: %s)", client.config.Model)
-	req := &ChatRequest{
-		Messages: []Message{
-			{
-				Role:    "system",
-				Content: GetExperienceSystemPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: resumeDetails,
-			},
-		},
-		ResponseFormat: &ResponseFormat{
-			Type: "json_object",
-			Schema: map[string]interface{}{
-				"schema": struct {
-					Experience []models.Experience `json:"experience"`
-				}{},
-			},
-		},
-	}
-
-	ctx := context.Background()
-	response, err := client.ChatCompletion(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing experience: %v", err)
-	}
-
-	if len(response.Choices) == 0 {
-		return nil, fmt.Errorf("no response received for experience")
-	}
-
-	contentStr, ok := response.Choices[0].Message.Content.(string)
-	if !ok {
-		return nil, fmt.Errorf("response content is not a string")
-	}
-
-	var result struct {
+func GetExperienceInJsonFormat(ctx context.Context, resumeDetails string) ([]models.Experience, error) {
+	type wrapper struct {
 		Experience []models.Experience `json:"experience"`
 	}
-	err = json.Unmarshal([]byte(contentStr), &result)
+	result, err := parseSection[wrapper](ctx, GetExperienceSystemPrompt(), resumeDetails,
+		map[string]interface{}{"schema": wrapper{}})
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling experience: %v", err)
+		return nil, err
 	}
-
 	return result.Experience, nil
 }
 
-func GetSkillsInJsonFormat(resumeDetails string) (*models.Skills, error) {
-	client := GetClientForResumeParserAgent()
-	if client == nil {
-		return nil, fmt.Errorf("failed to initialize agent client")
-	}
-	logger.Info("parsing skills (model: %s)", client.config.Model)
-	req := &ChatRequest{
-		Messages: []Message{
-			{
-				Role:    "system",
-				Content: GetSkillsSystemPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: resumeDetails,
-			},
-		},
-		ResponseFormat: &ResponseFormat{
-			Type: "json_object",
-			Schema: map[string]interface{}{
-				"schema": models.Skills{},
-			},
-		},
-	}
-
-	ctx := context.Background()
-	response, err := client.ChatCompletion(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing skills: %v", err)
-	}
-
-	if len(response.Choices) == 0 {
-		return nil, fmt.Errorf("no response received for skills")
-	}
-
-	contentStr, ok := response.Choices[0].Message.Content.(string)
-	if !ok {
-		return nil, fmt.Errorf("response content is not a string")
-	}
-
-	var skills models.Skills
-	err = json.Unmarshal([]byte(contentStr), &skills)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling skills: %v", err)
-	}
-
-	return &skills, nil
+func GetSkillsInJsonFormat(ctx context.Context, resumeDetails string) (*models.Skills, error) {
+	return parseSection[*models.Skills](ctx, GetSkillsSystemPrompt(), resumeDetails,
+		map[string]interface{}{"schema": models.Skills{}})
 }
 
-func GetProjectsInJsonFormat(resumeDetails string) ([]models.Project, error) {
-	client := GetClientForResumeParserAgent()
-	if client == nil {
-		return nil, fmt.Errorf("failed to initialize agent client")
-	}
-	logger.Info("parsing projects (model: %s)", client.config.Model)
-	req := &ChatRequest{
-		Messages: []Message{
-			{
-				Role:    "system",
-				Content: GetProjectsSystemPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: resumeDetails,
-			},
-		},
-		ResponseFormat: &ResponseFormat{
-			Type: "json_object",
-			Schema: map[string]interface{}{
-				"schema": struct {
-					Projects []models.Project `json:"projects"`
-				}{},
-			},
-		},
-	}
-
-	ctx := context.Background()
-	response, err := client.ChatCompletion(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing projects: %v", err)
-	}
-
-	if len(response.Choices) == 0 {
-		return nil, fmt.Errorf("no response received for projects")
-	}
-
-	contentStr, ok := response.Choices[0].Message.Content.(string)
-	if !ok {
-		return nil, fmt.Errorf("response content is not a string")
-	}
-
-	var result struct {
+func GetProjectsInJsonFormat(ctx context.Context, resumeDetails string) ([]models.Project, error) {
+	type wrapper struct {
 		Projects []models.Project `json:"projects"`
 	}
-	err = json.Unmarshal([]byte(contentStr), &result)
+	result, err := parseSection[wrapper](ctx, GetProjectsSystemPrompt(), resumeDetails,
+		map[string]interface{}{"schema": wrapper{}})
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling projects: %v", err)
+		return nil, err
 	}
-
 	return result.Projects, nil
 }
 
-func GetSummaryInJsonFormat(resumeDetails string) (string, error) {
-	client := GetClientForResumeParserAgent()
-	if client == nil {
-		return "", fmt.Errorf("failed to initialize agent client")
-	}
-	logger.Info("parsing summary (model: %s)", client.config.Model)
-	req := &ChatRequest{
-		Messages: []Message{
-			{
-				Role:    "system",
-				Content: GetSummarySystemPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: resumeDetails,
-			},
-		},
-		ResponseFormat: &ResponseFormat{
-			Type: "json_object",
-			Schema: map[string]interface{}{
-				"schema": struct {
-					Summary string `json:"summary"`
-				}{},
-			},
-		},
-	}
-
-	ctx := context.Background()
-	response, err := client.ChatCompletion(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("error parsing summary: %v", err)
-	}
-
-	if len(response.Choices) == 0 {
-		return "", fmt.Errorf("no response received for summary")
-	}
-
-	contentStr, ok := response.Choices[0].Message.Content.(string)
-	if !ok {
-		return "", fmt.Errorf("response content is not a string")
-	}
-
-	var result struct {
+func GetSummaryInJsonFormat(ctx context.Context, resumeDetails string) (string, error) {
+	type wrapper struct {
 		Summary string `json:"summary"`
 	}
-	err = json.Unmarshal([]byte(contentStr), &result)
+	result, err := parseSection[wrapper](ctx, GetSummarySystemPrompt(), resumeDetails,
+		map[string]interface{}{"schema": wrapper{}})
 	if err != nil {
-		return "", fmt.Errorf("error unmarshaling summary: %v", err)
+		return "", err
 	}
-
 	return result.Summary, nil
 }
 
-func GetAdditionalInfoInJsonFormat(resumeDetails string) (*models.AdditionalInfo, error) {
-	client := GetClientForResumeParserAgent()
-	if client == nil {
-		return nil, fmt.Errorf("failed to initialize agent client")
-	}
-	logger.Info("parsing additional info (model: %s)", client.config.Model)
-	req := &ChatRequest{
-		Messages: []Message{
-			{
-				Role:    "system",
-				Content: GetAdditionalInfoSystemPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: resumeDetails,
-			},
-		},
-		ResponseFormat: &ResponseFormat{
-			Type: "json_object",
-			Schema: map[string]interface{}{
-				"schema": models.AdditionalInfo{},
-			},
-		},
-	}
-
-	ctx := context.Background()
-	response, err := client.ChatCompletion(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing additional info: %v", err)
-	}
-
-	if len(response.Choices) == 0 {
-		return nil, fmt.Errorf("no response received for additional info")
-	}
-
-	contentStr, ok := response.Choices[0].Message.Content.(string)
-	if !ok {
-		return nil, fmt.Errorf("response content is not a string")
-	}
-
-	var additionalInfo models.AdditionalInfo
-	err = json.Unmarshal([]byte(contentStr), &additionalInfo)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling additional info: %v", err)
-	}
-
-	return &additionalInfo, nil
+func GetAdditionalInfoInJsonFormat(ctx context.Context, resumeDetails string) (*models.AdditionalInfo, error) {
+	return parseSection[*models.AdditionalInfo](ctx, GetAdditionalInfoSystemPrompt(), resumeDetails,
+		map[string]interface{}{"schema": models.AdditionalInfo{}})
 }
 
-func GetHobbiesInJsonFormat(resumeDetails string) ([]string, error) {
-	client := GetClientForResumeParserAgent()
-	if client == nil {
-		return nil, fmt.Errorf("failed to initialize agent client")
-	}
-	logger.Info("parsing hobbies (model: %s)", client.config.Model)
-	req := &ChatRequest{
-		Messages: []Message{
-			{
-				Role:    "system",
-				Content: GetHobbiesSystemPrompt(),
-			},
-			{
-				Role:    "user",
-				Content: resumeDetails,
-			},
-		},
-		ResponseFormat: &ResponseFormat{
-			Type: "json_object",
-			Schema: map[string]interface{}{
-				"schema": struct {
-					Hobbies []string `json:"hobbies"`
-				}{},
-			},
-		},
-	}
-
-	ctx := context.Background()
-	response, err := client.ChatCompletion(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing hobbies: %v", err)
-	}
-
-	if len(response.Choices) == 0 {
-		return nil, fmt.Errorf("no response received for hobbies")
-	}
-
-	contentStr, ok := response.Choices[0].Message.Content.(string)
-	if !ok {
-		return nil, fmt.Errorf("response content is not a string")
-	}
-
-	var result struct {
+func GetHobbiesInJsonFormat(ctx context.Context, resumeDetails string) ([]string, error) {
+	type wrapper struct {
 		Hobbies []string `json:"hobbies"`
 	}
-	err = json.Unmarshal([]byte(contentStr), &result)
+	result, err := parseSection[wrapper](ctx, GetHobbiesSystemPrompt(), resumeDetails,
+		map[string]interface{}{"schema": wrapper{}})
 	if err != nil {
-		return nil, fmt.Errorf("error unmarshaling hobbies: %v", err)
+		return nil, err
 	}
-
 	return result.Hobbies, nil
 }
 
-// Main function to assemble the complete Resume
-func GetResumeDetailInJsonFormat(resumeDetails string) (*models.Resume, error) {
-	title := "Sample Resume Title"
-	description := "Sample Resume Description"
-	fileType := "application/pdf"
-	// Parse each section concurrently for better performance
-	type result struct {
-		personalInfo   *models.PersonalInfo
-		education      []models.Education
-		experience     []models.Experience
-		skills         *models.Skills
-		projects       []models.Project
-		summary        string
-		additionalInfo *models.AdditionalInfo
-		hobbies        []string
-		err            error
-	}
+func GetResumeDetailInJsonFormat(ctx context.Context, resumeDetails string, userID uuid.UUID, title, description, fileType string) (*models.Resume, error) {
+	g, ctx := errgroup.WithContext(ctx)
 
-	ch := make(chan result, 8)
-
-	// Launch goroutines for each parsing task
-	go func() {
-		personalInfo, err := GetPersonalInfoInJsonFormat(resumeDetails)
-		ch <- result{personalInfo: personalInfo, err: err}
-	}()
-
-	go func() {
-		education, err := GetEducationInJsonFormat(resumeDetails)
-		ch <- result{education: education, err: err}
-	}()
-
-	go func() {
-		experience, err := GetExperienceInJsonFormat(resumeDetails)
-		ch <- result{experience: experience, err: err}
-	}()
-
-	go func() {
-		skills, err := GetSkillsInJsonFormat(resumeDetails)
-		ch <- result{skills: skills, err: err}
-	}()
-
-	go func() {
-		projects, err := GetProjectsInJsonFormat(resumeDetails)
-		ch <- result{projects: projects, err: err}
-	}()
-
-	go func() {
-		summary, err := GetSummaryInJsonFormat(resumeDetails)
-		ch <- result{summary: summary, err: err}
-	}()
-
-	go func() {
-		additionalInfo, err := GetAdditionalInfoInJsonFormat(resumeDetails)
-		ch <- result{additionalInfo: additionalInfo, err: err}
-	}()
-
-	go func() {
-		hobbies, err := GetHobbiesInJsonFormat(resumeDetails)
-		ch <- result{hobbies: hobbies, err: err}
-	}()
-
-	// Collect results
 	var (
 		personalInfo   *models.PersonalInfo
 		education      []models.Education
@@ -498,57 +142,86 @@ func GetResumeDetailInJsonFormat(resumeDetails string) (*models.Resume, error) {
 		summary        string
 		additionalInfo *models.AdditionalInfo
 		hobbies        []string
-		errors         []error
 	)
 
-	for i := 0; i < 8; i++ {
-		res := <-ch
-		if res.err != nil {
-			errors = append(errors, res.err)
-			continue
+	g.Go(func() error {
+		var err error
+		personalInfo, err = GetPersonalInfoInJsonFormat(ctx, resumeDetails)
+		if err != nil {
+			logger.Warn("failed to parse personal info: %v", err)
 		}
+		return nil
+	})
 
-		if res.personalInfo != nil {
-			personalInfo = res.personalInfo
+	g.Go(func() error {
+		var err error
+		education, err = GetEducationInJsonFormat(ctx, resumeDetails)
+		if err != nil {
+			logger.Warn("failed to parse education: %v", err)
 		}
-		if res.education != nil {
-			education = res.education
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		experience, err = GetExperienceInJsonFormat(ctx, resumeDetails)
+		if err != nil {
+			logger.Warn("failed to parse experience: %v", err)
 		}
-		if res.experience != nil {
-			experience = res.experience
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		skills, err = GetSkillsInJsonFormat(ctx, resumeDetails)
+		if err != nil {
+			logger.Warn("failed to parse skills: %v", err)
 		}
-		if res.skills != nil {
-			skills = res.skills
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		projects, err = GetProjectsInJsonFormat(ctx, resumeDetails)
+		if err != nil {
+			logger.Warn("failed to parse projects: %v", err)
 		}
-		if res.projects != nil {
-			projects = res.projects
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		summary, err = GetSummaryInJsonFormat(ctx, resumeDetails)
+		if err != nil {
+			logger.Warn("failed to parse summary: %v", err)
 		}
-		if res.summary != "" {
-			summary = res.summary
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		additionalInfo, err = GetAdditionalInfoInJsonFormat(ctx, resumeDetails)
+		if err != nil {
+			logger.Warn("failed to parse additional info: %v", err)
 		}
-		if res.additionalInfo != nil {
-			additionalInfo = res.additionalInfo
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		hobbies, err = GetHobbiesInJsonFormat(ctx, resumeDetails)
+		if err != nil {
+			logger.Warn("failed to parse hobbies: %v", err)
 		}
-		if res.hobbies != nil {
-			hobbies = res.hobbies
-		}
+		return nil
+	})
+
+	if err := g.Wait(); err != nil {
+		return nil, fmt.Errorf("resume parsing failed: %w", err)
 	}
 
-	// Log errors but continue with partial data
-	if len(errors) > 0 {
-		for _, err := range errors {
-			logger.Warn("resume section parsing error: %v", err)
-		}
-	}
-
-	// Create the complete Resume object
-	newUUID, err := uuid.NewUUID()
-	if err != nil {
-		logger.Error("failed to generate UUID: %v", err)
-		newUUID = uuid.Nil
-	}
 	resume := &models.Resume{
-		UserID:      newUUID,
+		UserID:      userID,
 		Title:       title,
 		Description: description,
 		FileType:    fileType,
@@ -563,7 +236,6 @@ func GetResumeDetailInJsonFormat(resumeDetails string) (*models.Resume, error) {
 		Hobbies:     hobbies,
 	}
 
-	// Set embedded structs
 	if personalInfo != nil {
 		resume.PersonalInfo = *personalInfo
 	}
@@ -574,86 +246,39 @@ func GetResumeDetailInJsonFormat(resumeDetails string) (*models.Resume, error) {
 	return resume, nil
 }
 
-// Alternative sequential approach (if you prefer not to use goroutines)
-func GetResumeDetailInJsonFormatSequential(resumeDetails string, userID uuid.UUID, title, description, fileType string) (*models.Resume, error) {
-	resume := &models.Resume{
-		UserID:      userID,
-		Title:       title,
-		Description: description,
-		FileType:    fileType,
-		IsActive:    true,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+func ResumeFixJsonFormat(ctx context.Context, resumeDetails string, errorDetails string) (string, error) {
+	client, err := GetSharedClient()
+	if err != nil {
+		return "", fmt.Errorf("failed to get agent client: %w", err)
 	}
 
-	// Parse personal info
-	if personalInfo, err := GetPersonalInfoInJsonFormat(resumeDetails); err != nil {
-		logger.Warn("failed to parse personal info: %v", err)
-	} else if personalInfo != nil {
-		logger.Info("personal info parsed successfully")
-		resume.PersonalInfo = *personalInfo
+	req := &ChatRequest{
+		Messages: []Message{
+			{Role: "system", Content: models.GetResumeJsonFormatFix()},
+			{Role: "user", Content: resumeDetails + "\n" + errorDetails},
+		},
+		ResponseFormat: &ResponseFormat{
+			Type:   "json_object",
+			Schema: map[string]interface{}{"schema": models.Resume{}},
+		},
 	}
 
-	// Parse education
-	if education, err := GetEducationInJsonFormat(resumeDetails); err != nil {
-		logger.Warn("failed to parse education: %v", err)
-	} else {
-		logger.Info("education parsed successfully")
-		resume.Education = education
+	response, err := client.ChatCompletion(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("failed to fix JSON format via AI: %w", err)
 	}
 
-	// Parse experience
-	if experience, err := GetExperienceInJsonFormat(resumeDetails); err != nil {
-		logger.Warn("failed to parse experience: %v", err)
-	} else {
-		logger.Info("experience parsed successfully")
-		resume.Experience = experience
+	if len(response.Choices) > 0 {
+		contentStr, ok := response.Choices[0].Message.Content.(string)
+		if ok {
+			return contentStr, nil
+		}
+		return fmt.Sprintf("%v", response.Choices[0].Message.Content), nil
 	}
 
-	// Parse skills
-	if skills, err := GetSkillsInJsonFormat(resumeDetails); err != nil {
-		logger.Warn("failed to parse skills: %v", err)
-	} else {
-		logger.Info("skills parsed successfully")
-		resume.Skills = skills
-	}
-
-	// Parse projects
-	if projects, err := GetProjectsInJsonFormat(resumeDetails); err != nil {
-		logger.Warn("failed to parse projects: %v", err)
-	} else {
-		logger.Info("projects parsed successfully")
-		resume.Projects = projects
-	}
-
-	// Parse summary
-	if summary, err := GetSummaryInJsonFormat(resumeDetails); err != nil {
-		logger.Warn("failed to parse summary: %v", err)
-	} else {
-		logger.Info("summary parsed successfully")
-		resume.Summary = summary
-	}
-
-	// Parse additional info
-	if additionalInfo, err := GetAdditionalInfoInJsonFormat(resumeDetails); err != nil {
-		logger.Warn("failed to parse additional info: %v", err)
-	} else {
-		logger.Info("additional info parsed successfully")
-		resume.AdditionalInfo = additionalInfo
-	}
-
-	// Parse hobbies
-	if hobbies, err := GetHobbiesInJsonFormat(resumeDetails); err != nil {
-		logger.Warn("failed to parse hobbies: %v", err)
-	} else {
-		logger.Info("hobbies parsed successfully")
-		resume.Hobbies = hobbies
-	}
-
-	return resume, nil
+	return "", fmt.Errorf("no response received for JSON format fix")
 }
 
-// System prompt functions with detailed schema specifications
 func GetPersonalInfoSystemPrompt() string {
 	return `You are a resume data extraction system. Your task is to extract personal information from the provided resume text and return ONLY a valid JSON object that matches the PersonalInfo schema. Follow these rules strictly:
 
@@ -884,52 +509,4 @@ Hobbies Schema:
 }
 
 Extract hobbies and interests and return ONLY the JSON object.`
-}
-
-// GetClientForResumeParserAgent loads configuration and returns a ready-to-use agent client.
-// Returns nil if configuration loading fails.
-func GetClientForResumeParserAgent() *ConfigAgentClient {
-	cfg, err := config.LoadAgentClient()
-	if err != nil {
-		logger.Error("failed to load agent client configuration: %v", err)
-		return nil
-	}
-	return NewAgentClient(cfg)
-}
-
-// ResumeFixJsonFormat attempts to fix malformed JSON via AI
-func ResumeFixJsonFormat(resumeDetails string, errorDetails string) string {
-	client := GetClientForResumeParserAgent()
-	if client == nil {
-		logger.Error("cannot fix JSON format: agent client is nil")
-		return ""
-	}
-
-	req := &ChatRequest{
-		Messages: []Message{
-			{Role: "system", Content: models.GetResumeJsonFormatFix()},
-			{Role: "user", Content: resumeDetails + "\n" + errorDetails},
-		},
-		ResponseFormat: &ResponseFormat{
-			Type: "json_object",
-			Schema: map[string]interface{}{
-				"schema": models.Resume{},
-			},
-		},
-	}
-
-	ctx := context.Background()
-	response, err := client.ChatCompletion(ctx, req)
-	if err != nil {
-		logger.Error("failed to fix JSON format via AI: %v", err)
-		return ""
-	}
-
-	if len(response.Choices) > 0 {
-		logger.Debug("AI JSON fix response received")
-		return fmt.Sprintf("%v", response.Choices[0].Message.Content)
-	}
-
-	logger.Warn("no response received for JSON format fix")
-	return ""
 }
