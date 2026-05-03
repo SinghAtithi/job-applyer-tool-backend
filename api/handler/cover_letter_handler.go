@@ -27,9 +27,16 @@ func NewCoverLetterHandler(db *gorm.DB) *CoverLetterHandler {
 func (h *CoverLetterHandler) CreateCoverLetter(c *gin.Context) {
 	var requestBody models.JobDescriptionTable
 
-	if err := c.BindJSON(&requestBody); err != nil || requestBody.URL == "" {
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
 		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
-			"VALIDATION_ERROR", "Invalid request body: URL is required", "",
+			"VALIDATION_ERROR", "Invalid request body: "+err.Error(), "",
+		))
+		return
+	}
+
+	if requestBody.URL == "" {
+		c.JSON(http.StatusBadRequest, dto.ErrorResponse(
+			"VALIDATION_ERROR", "URL is required", "",
 		))
 		return
 	}
@@ -58,10 +65,17 @@ func (h *CoverLetterHandler) CreateCoverLetter(c *gin.Context) {
 	}
 
 	coverLetter, err := coverLetterHelper.GetCoverLetter(c.Request.Context(), jobDescriptionContent, requestBody.UserName, requestBody.URL)
-	if err != nil || coverLetter.ContentInfo == "" {
+	if err != nil {
 		logger.Error("failed to generate cover letter: %v", err)
 		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
 			"INTERNAL_ERROR", "Unable to create cover letter", "",
+		))
+		return
+	}
+
+	if coverLetter.ContentInfo == "" {
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
+			"INTERNAL_ERROR", "Generated cover letter is empty", "",
 		))
 		return
 	}

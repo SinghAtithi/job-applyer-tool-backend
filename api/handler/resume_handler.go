@@ -72,15 +72,7 @@ func (h *ResumeHandler) CreateResume(c *gin.Context) {
 		resumeInJson.UserName = username
 	}
 
-	responseData, err := resumeHelper.CommitResumeToDB(resumeInJson)
-	if err != nil {
-		logger.Error("failed to commit resume to database: %v", err)
-		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
-			"DATABASE_ERROR", "Failed to save resume", err.Error(),
-		))
-		return
-	}
-
+	// Generate UUID BEFORE committing to database
 	resumeUUID, err := uuid.NewUUID()
 	if err != nil || resumeUUID == uuid.Nil {
 		logger.Error("failed to generate UUID for resume: %v", err)
@@ -90,6 +82,15 @@ func (h *ResumeHandler) CreateResume(c *gin.Context) {
 		return
 	}
 	resumeInJson.UserID = resumeUUID
+
+	responseData, err := resumeHelper.CommitResumeToDB(resumeInJson)
+	if err != nil {
+		logger.Error("failed to commit resume to database: %v", err)
+		c.JSON(http.StatusInternalServerError, dto.ErrorResponse(
+			"DATABASE_ERROR", "Failed to save resume", err.Error(),
+		))
+		return
+	}
 
 	c.JSON(http.StatusCreated, dto.SuccessResponse(responseData, "Resume created successfully"))
 }
