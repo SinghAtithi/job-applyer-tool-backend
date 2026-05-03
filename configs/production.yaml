@@ -1,7 +1,7 @@
-port: 8080
+port: 8081
 environment: production
 logging:
-  level: info
+  level: warn
 agent:
   base_url: https://api.groq.com/openai/v1/chat/completions
-  model: meta-llama/llama-prompt-guard-2-86m
+  model: llama-3.3-70b-versatile

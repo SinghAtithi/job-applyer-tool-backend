@@ -8,19 +8,18 @@ import (
 	"os"
 	"sync"
 
-	publicPackage "example.com/pkg/dotEnvPackage"
 	"gopkg.in/yaml.v3"
 )
 
 // ApplicationConfig represents the main application configuration
 type ApplicationConfig struct {
-	Port        string `yaml:"port" default:"8080"`
-	Environment string `yaml:"environment" default:"production"`
+	Port        string `yaml:"port"`
+	Environment string `yaml:"environment"`
 	Logging     struct {
-		Level string `yaml:"level" default:"info"`
+		Level string `yaml:"level"`
 	} `yaml:"logging"`
-	devMode   bool // Not persisted, runtime flag
-	debugMode bool // Set via --debug flag
+	devMode   bool
+	debugMode bool
 }
 
 // AgentClient holds Groq API configuration loaded from environment variables and YAML config
@@ -49,8 +48,6 @@ func NewApplicationConfig() (*ApplicationConfig, error) {
 
 // getConfigPath determines the configuration file path based on environment
 func getConfigPath() string {
-	_ = publicPackage.LoadDotEnvFile(".env")
-
 	if configPath := os.Getenv("CONFIG_PATH"); configPath != "" {
 		return configPath
 	}
@@ -140,21 +137,30 @@ func selectModel() string {
 // The model is selected once at first call and cached; subsequent calls return the same config.
 func LoadAgentClient() (*AgentClient, error) {
 	agentClientOnce.Do(func() {
-		modelName := selectModel()
+		defaultModel := selectModel()
 
 		cfg := struct {
-			BaseURL string `yaml:"agent_base_url"`
-			Model   string `yaml:"agent_model"`
-		}{
-			BaseURL: "https://api.groq.com/openai/v1/chat/completions",
-			Model:   modelName,
-		}
+			Agent struct {
+				BaseURL string `yaml:"base_url"`
+				Model   string `yaml:"model"`
+			} `yaml:"agent"`
+		}{}
 
 		if err := readYamlFile(getConfigPath(), &cfg); err != nil {
 			if !os.IsNotExist(err) {
 				agentClientErr = fmt.Errorf("failed to read agent config: %w", err)
 				return
 			}
+		}
+
+		baseURL := cfg.Agent.BaseURL
+		if baseURL == "" {
+			baseURL = "https://api.groq.com/openai/v1/chat/completions"
+		}
+
+		model := cfg.Agent.Model
+		if model == "" {
+			model = defaultModel
 		}
 
 		apiKey := os.Getenv("GROQ_API_KEY")
@@ -165,8 +171,8 @@ func LoadAgentClient() (*AgentClient, error) {
 
 		agentClient = &AgentClient{
 			APIKey:  apiKey,
-			BaseURL: cfg.BaseURL,
-			Model:   cfg.Model,
+			BaseURL: baseURL,
+			Model:   model,
 		}
 	})
 
